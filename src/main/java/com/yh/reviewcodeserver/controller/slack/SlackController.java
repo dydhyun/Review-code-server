@@ -18,7 +18,7 @@ public class SlackController {
 
     @PostMapping("/message/v1")
     public void sendToSlack(@RequestBody String message){
-        System.out.println("test");
+        System.out.println("test2");
         slackService.sendMessage(message);
     }
 }
