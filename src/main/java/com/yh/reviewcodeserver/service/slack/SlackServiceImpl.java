@@ -1,6 +1,6 @@
 package com.yh.reviewcodeserver.service.slack;
 
-import com.yh.reviewcodeserver.client.SlackClient;
+import com.yh.reviewcodeserver.client.slack.SlackClient;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
