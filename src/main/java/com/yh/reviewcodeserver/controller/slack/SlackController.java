@@ -6,13 +6,15 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.HashMap;
 import java.util.Map;
 
-@RestController
+@RestController()
+@RequestMapping("/slack")
 public class SlackController {
     private final SlackService slackService;
 
@@ -20,9 +22,9 @@ public class SlackController {
         this.slackService = slackService;
     }
 
-    @PostMapping("/message/slack/v1")
+    @PostMapping("/message/v1")
     public void sendToSlack(@RequestBody String message){
-
+        System.out.println("test");
         slackService.sendMessage(message);
     }
 }
