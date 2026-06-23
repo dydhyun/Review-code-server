@@ -10,7 +10,6 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
 
       - uses: actions/checkout@v4
         with:
@@ -20,7 +19,26 @@ jobs:
         run: |
           git log --oneline -n 5
 
-      - name: Print Diff
+      - name: Save Diff
         run: |
-          git diff HEAD~1 HEAD
-          
+          {
+            echo "DIFF<<EOF"
+            git diff HEAD~1 HEAD
+            echo "EOF"
+          } >> $GITHUB_ENV
+
+      - name: Check Saved Diff
+        run: |
+          echo "$DIFF"
+
+      - name: Review With OpenAI
+        run: |
+          curl https://api.openai.com/v1/responses \
+            -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d @- <<EOF
+          {
+            "model": "gpt-5-mini",
+            "input": "시니어 백엔드 개발자 관점으로 다음 변경사항을 리뷰해봐.\n\n$DIFF"
+          }
+          EOF
