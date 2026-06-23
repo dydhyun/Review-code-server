@@ -1,4 +1,4 @@
-package com.yh.reviewcodeserver.config.webhook;
+package com.yh.reviewcodeserver.client.slack;
 
 import lombok.Getter;
 import lombok.Setter;
@@ -7,10 +7,9 @@ import org.springframework.stereotype.Component;
 
 @Getter
 @Setter
-@ConfigurationProperties(prefix = "slack")
 @Component
+@ConfigurationProperties(prefix = "slack")
 public class SlackProperties {
 
     private String webhookUrl;
-
 }

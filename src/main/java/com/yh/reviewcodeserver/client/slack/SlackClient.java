@@ -1,6 +1,5 @@
 package com.yh.reviewcodeserver.client.slack;
 
-import com.yh.reviewcodeserver.config.webhook.SlackProperties;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
