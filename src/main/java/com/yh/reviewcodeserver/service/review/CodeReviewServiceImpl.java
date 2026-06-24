@@ -4,8 +4,10 @@ import com.yh.reviewcodeserver.Dto.ReviewRequest;
 import com.yh.reviewcodeserver.client.llm.openrouter.OpenRouterClient;
 import com.yh.reviewcodeserver.service.slack.SlackService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CodeReviewServiceImpl implements CodeReviewService{
@@ -15,6 +17,11 @@ public class CodeReviewServiceImpl implements CodeReviewService{
 
     @Override
     public void review(ReviewRequest request) {
+
+        if (request.diff() == null || request.diff().isBlank()) {
+            log.info(request.repository() + " repo 커밋 발생. 검토사항 없음.");
+            return;
+        }
 
         String reviewResult = openRouterClient.review(request);
 
