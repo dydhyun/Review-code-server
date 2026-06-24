@@ -18,10 +18,6 @@ public class CodeReviewServiceImpl implements CodeReviewService{
     @Override
     public void review(ReviewRequest request) {
 
-        log.debug("request={}", request);
-        log.info("diff=[{}]", request.diff());
-        log.info("diff length={}",
-                request.diff() == null ? null : request.diff().length());
 
         if (request.diff() == null || request.diff().isBlank()) {
             log.info("{} repo 커밋 발생. 검토사항 없음.", request.repository());
