@@ -27,9 +27,16 @@ jobs:
             echo "EOF"
           } >> $GITHUB_ENV
 
+      - name: Curl Test
+        run: |
+          curl -v -X POST \
+            "${{ secrets.REVIEW_API_URL }}" \
+            -H "Content-Type: text/plain" \
+            --data "$DIFF"
+
       - name: Send Review Request
         run: |
           curl -X POST \
             "${{ secrets.REVIEW_API_URL }}" \
-            -H "Content-Type: application/json" \
-            --data "$DfIFF"
+            -H "Content-Type: text/plain" \
+            --data "$DIFF"
