@@ -34,7 +34,7 @@ jobs:
         run: |
           cat <<EOF > payload.json
           {
-            "diff": %(jq -Rs . <<< "$DIFF"),
+            "diff": $(jq -Rs . <<< "$DIFF"),
             "author": "$AUTHOR",
             "repository": "$REPOSITORY",
             "commitMessage": $(jq -Rs . <<< "$COMMIT_MESSAGE")
