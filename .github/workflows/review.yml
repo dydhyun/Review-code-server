@@ -27,18 +27,9 @@ jobs:
             echo "EOF"
           } >> $GITHUB_ENV
 
-      - name: Check Saved Diff
+      - name: Send Review Request
         run: |
-          echo "$DIFF"
-
-      - name: Review With OpenAI
-        run: |
-          curl https://api.openai.com/v1/responses \
-            -H "Authorization: Bearer ${{ secrets.OPENAI_API_KEY }}" \
+          curl -X POST \
+            "${{ secrets.REVIEW_API_URL }}" \
             -H "Content-Type: application/json" \
-            -d @- <<EOF
-          {
-            "model": "gpt-5-mini",
-            "input": "시니어 백엔드 개발자 관점으로 다음 변경사항을 리뷰해봐.\n\n$DIFF"
-          }
-          EOF
+            --data "$DfIFF"
