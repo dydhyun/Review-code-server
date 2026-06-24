@@ -1,5 +1,6 @@
 package com.yh.reviewcodeserver.service.review;
 
+import com.yh.reviewcodeserver.Dto.ReviewRequest;
 import com.yh.reviewcodeserver.client.llm.openrouter.OpenRouterClient;
 import com.yh.reviewcodeserver.service.slack.SlackService;
 import lombok.RequiredArgsConstructor;
@@ -13,9 +14,9 @@ public class CodeReviewServiceImpl implements CodeReviewService{
     private final SlackService slackService;
 
     @Override
-    public void review(String diff) {
+    public void review(ReviewRequest request) {
 
-        String reviewResult = openRouterClient.review(diff);
+        String reviewResult = openRouterClient.review(request);
 
         slackService.sendMessage(reviewResult);
     }
