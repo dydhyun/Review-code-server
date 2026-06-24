@@ -15,28 +15,26 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Check Git History
-        run: |
-          git log --oneline -n 5
-
       - name: Save Diff
         run: |
           {
             echo "DIFF<<EOF"
             git diff HEAD~1 HEAD
             echo "EOF"
+
+            echo "COMMIT_MESSAGE<<EOF"
+            git log -1 --pretty=%B
+            echo "EOF"
+
+            echo "AUTHOR=${{ github.actor }}"
+            echo "REPOSITORY=${{ github.repository }}"
           } >> $GITHUB_ENV
 
-      - name: Curl Test
-        run: |
-          curl -v -X POST \
-            "${{ secrets.REVIEW_API_URL }}" \
-            -H "Content-Type: text/plain" \
-            --data "$DIFF"
 
       - name: Send Review Request
         run: |
           curl -X POST \
             "${{ secrets.REVIEW_API_URL }}" \
+            -H "Authorization: Bearer ${{ secrets.REVIEW_API_KEY }}" \
             -H "Content-Type: text/plain" \
             --data "$DIFF"
