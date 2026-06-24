@@ -19,7 +19,9 @@ jobs:
         run: |
           {
             echo "DIFF<<EOF"
-            git diff HEAD~1 HEAD
+            git diff HEAD~1 HEAD \
+              -- '*.java' \
+              ':(exclude)src/test/**'
             echo "EOF"
 
             echo "COMMIT_MESSAGE<<EOF"
@@ -32,14 +34,17 @@ jobs:
 
       - name: Create payload
         run: |
-          cat <<EOF > payload.json
-          {
-            "diff": $(jq -Rs . <<< "$DIFF"),
-            "author": "$AUTHOR",
-            "repository": "$REPOSITORY",
-            "commitMessage": $(jq -Rs . <<< "$COMMIT_MESSAGE")
-          }
-          EOF
+          jq -n \
+          --arg diff "$DIFF" \
+          --arg author "$AUTHOR" \
+          --arg repository "$REPOSITORY" \
+          --arg commitMessage "$COMMIT_MESSAGE" \
+          '{
+            diff: $diff,
+            author: $author,
+            repository: $repository,
+            commitMessage: $commitMessage
+          }' > payload.json
 
           cat payload.json
 
