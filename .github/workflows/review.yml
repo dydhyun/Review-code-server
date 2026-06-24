@@ -15,7 +15,7 @@ jobs:
         with:
           fetch-depth: 2
 
-      - name: Save Diff
+      - name: Save Review Data
         run: |
           {
             echo "DIFF<<EOF"
@@ -30,11 +30,23 @@ jobs:
             echo "REPOSITORY=${{ github.repository }}"
           } >> $GITHUB_ENV
 
+      - name: Create payload
+        run: |
+          cat <<EOF > payload.json
+          {
+            "diff": %(jq -Rs . <<< "$DIFF"),
+            "author": "$AUTHOR",
+            "repository": "$REPOSITORY",
+            "commitMessage": $(jq -Rs . <<< "$COMMIT_MESSAGE")
+          }
+          EOF
+
+          cat payload.json
 
       - name: Send Review Request
         run: |
           curl -X POST \
             "${{ secrets.REVIEW_API_URL }}" \
             -H "Authorization: Bearer ${{ secrets.REVIEW_API_KEY }}" \
-            -H "Content-Type: text/plain" \
-            --data "$DIFF"
+            -H "Content-Type: application/json" \
+            --data @payload.json
