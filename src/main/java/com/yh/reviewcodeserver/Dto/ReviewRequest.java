@@ -6,4 +6,10 @@ public record ReviewRequest(
         String repository,
         String commitMessage
 ) {
+    public int getDiffSize() {
+        if (diff == null || diff.isBlank()) {
+            return 0;
+        }
+        return diff.split("\n", -1).length;
+    }
 }
