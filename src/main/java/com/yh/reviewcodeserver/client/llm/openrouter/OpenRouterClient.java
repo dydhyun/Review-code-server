@@ -95,12 +95,12 @@ public class OpenRouterClient {
             // - OpenRouter 자체 부하
             System.out.println(e.getResponseBodyAsString()); // TODO: log.info 교체
             return commitInfo +
-                    "⚠ OpenRouter Rate Limit 발생. 잠시 후 재시도해주세요.\n";
+                    "⚠ OpenRouter Rate Limit 발생. 잠시 후 재시도해주세요.";
         } catch (HttpClientErrorException e) {
 
             System.out.println(e.getResponseBodyAsString()); // TODO: log.info 교체
             return commitInfo +
-                    "⚠ 리뷰 생성 실패: \n" + e.getStatusCode();
+                    "⚠ 리뷰 생성 실패: " + e.getStatusCode();
         }
     }
 
