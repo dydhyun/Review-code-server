@@ -146,13 +146,13 @@ Diff 뿐 아니라 프로젝트 맥락을 파악한 리뷰 제공
 * Slack Webhook 연동
 * Push → AI Review → Slack 파이프라인 완성
 * Diff 크기 제한 (1000줄 초과 시 리뷰 생략)
+* 리뷰 포맷 고정 / 품질 개선
+* ApiKeyFilter(인증)
 
 ---
 
 ## 향후 개선 예정
 
-* 리뷰 포맷 고정 / 품질 개선
-* ApiKeyFilter(인증)
 * Queue 기반 비동기 처리
 * Retry / DLQ
 * Review History
