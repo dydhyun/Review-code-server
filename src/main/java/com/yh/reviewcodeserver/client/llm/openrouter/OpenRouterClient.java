@@ -27,6 +27,7 @@ public class OpenRouterClient {
 
     public String review(ReviewRequest actionsRequest){
         String commitInfo = getCommitInfo(actionsRequest);
+        log.info(commitInfo);
 
         if (actionsRequest.getDiffSize() > 1000){
             return commitInfo + "변경사항이 많아 리뷰를 생략합니다.";
