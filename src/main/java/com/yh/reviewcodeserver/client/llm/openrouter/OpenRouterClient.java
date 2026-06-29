@@ -55,6 +55,8 @@ public class OpenRouterClient {
 
 
         try {
+            long startTime = System.currentTimeMillis();
+
             log.info("OpenRouter 응답 요청");
             ResponseEntity<OpenRouterResponse> response =
                     restTemplate.postForEntity(
@@ -64,7 +66,7 @@ public class OpenRouterClient {
                     );
 
             OpenRouterResponse responseBody = response.getBody();
-            log.info("OpenRouter 응답 수신");
+            log.info("OpenRouter 응답 수신 | 응답시간 : {}ms", System.currentTimeMillis() - startTime);
 
             if (responseBody == null) {
                 // Optional 쓸 필요 없음. null 이면 코드 흐름을 여기서 끊어야 함
@@ -81,7 +83,7 @@ public class OpenRouterClient {
             if (openRouterChoices == null || openRouterChoices.isEmpty()) {
                 throw new IllegalStateException("OpenRouter AI 응답이 비어있습니다.");
             }
-            log.info("usages = {}", usages);
+            log.info("토큰사용량 : {}", usages);
             return commitInfo +
                     "\uD83E\uDD16 AI Review \n" +
                     openRouterChoices.get(0).getMessage().getContent();
