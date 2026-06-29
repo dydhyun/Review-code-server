@@ -81,8 +81,7 @@ public class OpenRouterClient {
             if (openRouterChoices == null || openRouterChoices.isEmpty()) {
                 throw new IllegalStateException("OpenRouter AI 응답이 비어있습니다.");
             }
-            System.out.println(usages);// TODO: log.info 교체
-
+            log.info("usages = {}", usages);
             return commitInfo +
                     "\uD83E\uDD16 AI Review \n" +
                     openRouterChoices.get(0).getMessage().getContent();
@@ -93,12 +92,12 @@ public class OpenRouterClient {
             // - 분당 요청 횟수 초과 (여러 레포에서 동시에 push)
             // - 일일 토큰 한도 초과 (무료 모델 사용 중)
             // - OpenRouter 자체 부하
-            System.out.println(e.getResponseBodyAsString()); // TODO: log.info 교체
+            log.error("error 발생 {}", e.getResponseBodyAsString());
             return commitInfo +
                     "⚠ OpenRouter Rate Limit 발생. 잠시 후 재시도해주세요.";
         } catch (HttpClientErrorException e) {
 
-            System.out.println(e.getResponseBodyAsString()); // TODO: log.info 교체
+            log.error("error 발생 {}", e.getResponseBodyAsString());
             return commitInfo +
                     "⚠ 리뷰 생성 실패: " + e.getStatusCode();
         }
