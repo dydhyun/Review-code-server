@@ -2,7 +2,7 @@
     <!-- 색상 변환규칙 가져오기 -->
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
-    <!-- MDC 패턴 덮어쓰기 repository 추적 추가 -->
+    <!-- MDC 패턴 덮어쓰기 원격저장소 추적 추가 -->
     <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
             <pattern>%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(%-5level) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%X{repository}]){yellow} [%15.15t] %clr(%logger{36}){cyan} : %msg%n</pattern>
