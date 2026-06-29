@@ -25,7 +25,9 @@ public class CodeReviewServiceImpl implements CodeReviewService{
         }
 
         String reviewResult = openRouterClient.review(request);
+        log.info("reviewResult={}", reviewResult);
 
         slackService.sendMessage(reviewResult);
+        log.info("Slack 호출 완료");
     }
 }
