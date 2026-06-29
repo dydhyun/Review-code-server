@@ -53,5 +53,6 @@ jobs:
           curl -X POST \
             "${{ secrets.REVIEW_API_URL }}" \
             -H "Authorization: Bearer ${{ secrets.REVIEW_API_KEY }}" \
+            -H "X-Repository: ${{ github.repository}}" \
             -H "Content-Type: application/json" \
             --data @payload.json

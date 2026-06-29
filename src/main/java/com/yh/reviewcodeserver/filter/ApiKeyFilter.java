@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.MDC;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -32,6 +33,16 @@ public class ApiKeyFilter extends OncePerRequestFilter {
             return;
         }
 
-        filterChain.doFilter(request,response);
+        try {
+            // 요청 body에서 repository 꺼내기 전에
+            // Header에서 repository를 받는 방법이 더 간단해요
+            String repository = request.getHeader("X-Repository");
+            MDC.put("repository", repository != null ? repository : "unknown");
+
+            filterChain.doFilter(request, response);
+        } finally {
+            MDC.clear(); // ← 반드시 정리! 안 하면 Thread 재사용 시 이전 값이 남음
+        }
+
     }
 }
