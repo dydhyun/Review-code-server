@@ -95,7 +95,7 @@ public class OpenRouterClient {
             // - 분당 요청 횟수 초과 (여러 레포에서 동시에 push)
             // - 일일 토큰 한도 초과 (무료 모델 사용 중)
             // - OpenRouter 자체 부하
-            log.error("error 발생 {}", e.getResponseBodyAsString());
+            log.error("OpenRouter TooManyRequests error 발생 {}", e.getResponseBodyAsString());
             return commitInfo +
                     "⚠ OpenRouter Rate Limit 발생. 잠시 후 재시도해주세요.";
         } catch (HttpClientErrorException e) {
