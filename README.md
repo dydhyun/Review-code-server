@@ -148,6 +148,10 @@ Diff 뿐 아니라 프로젝트 맥락을 파악한 리뷰 제공
 * Diff 크기 제한 (1000줄 초과 시 리뷰 생략)
 * 리뷰 포맷 고정 / 품질 개선
 * ApiKeyFilter(인증)
+* GlobalExceptionHandler (전역 예외 처리)
+* 응답시간 / 토큰 사용량 로깅
+* MDC 적용 (Repository 단위 로그 추적)
+* 단위 테스트 작성 (OpenRouterClient, SlackClient, ReviewService)
 
 ---
 
@@ -158,4 +162,3 @@ Diff 뿐 아니라 프로젝트 맥락을 파악한 리뷰 제공
 * Review History
 * Multi Repository 지원
 * RAG 기반 프로젝트 문맥 분석
-* 토큰 비용 추적
