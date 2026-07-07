@@ -1,21 +1,24 @@
 package com.yh.reviewcodeserver.controller.review;
 
 import com.yh.reviewcodeserver.Dto.ReviewRequest;
-import com.yh.reviewcodeserver.service.review.CodeReviewService;
+import com.yh.reviewcodeserver.queue.service.RedisQueueService;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/v1/reviews")
 public class ReviewController {
 
-    private final CodeReviewService codeReviewService;
+    private final RedisQueueService redisQueueService;
 
-    public ReviewController(CodeReviewService codeReviewService) {
-        this.codeReviewService = codeReviewService;
+    public ReviewController(RedisQueueService redisQueueService) {
+        this.redisQueueService = redisQueueService;
     }
 
+
+    @ResponseStatus(HttpStatus.ACCEPTED)
     @PostMapping("")
     public void review(@RequestBody ReviewRequest request){
-        codeReviewService.review(request);
+        redisQueueService.enqueue(request);
     }
 }
