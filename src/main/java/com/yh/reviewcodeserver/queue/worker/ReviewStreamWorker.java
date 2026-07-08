@@ -3,6 +3,7 @@ package com.yh.reviewcodeserver.queue.worker;
 import com.yh.reviewcodeserver.queue.model.ReviewJob;
 import com.yh.reviewcodeserver.queue.model.StreamNames;
 import com.yh.reviewcodeserver.service.review.CodeReviewServiceImpl;
+import com.yh.reviewcodeserver.service.slack.SlackService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Range;
@@ -23,13 +24,14 @@ import java.util.Map;
 public class ReviewStreamWorker {
 
     private static final String CONSUMER_NAME = "review-worker-1";
-    private static final int MAX_RETRY = 3;
+    private static final int MAX_RETRY = 5;
     private static final Duration RECLAIM_IDLE_TIME = Duration.ofSeconds(30);
     // api 호출하고 응답받아서 ack 처리 하는 보호시간
 
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
     private final CodeReviewServiceImpl codeReviewServiceImpl;
+    private final SlackService slackService;
 
     // 직접구현 이후 Spring Data Redis의 StreamMessageListenerContainer로 변경
     @Scheduled(fixedRate = 1000)
@@ -60,13 +62,20 @@ public class ReviewStreamWorker {
                 10
         );
         if (pending.isEmpty()) {
+            log.debug("PEL 확인: 대기중인 메세지 없음");
             return;
         }
+
+        log.info("PEL 확인: 총 {}건 대기중", pending.size());
+
         for (PendingMessage pendingMessage : pending) {
             RecordId id = pendingMessage.getId();
             long deliveryCount = pendingMessage.getTotalDeliveryCount();
+            Duration elapsed = pendingMessage.getElapsedTimeSinceLastDelivery();
 
-            if (pendingMessage.getElapsedTimeSinceLastDelivery().compareTo(RECLAIM_IDLE_TIME) < 0) {
+            if (elapsed.compareTo(RECLAIM_IDLE_TIME) < 0) {
+                log.info("재시도 대기중: {} ({}번째 시도 예정, 대기 {}초 경과, {}초 후 재시도 가능)",
+                        id, deliveryCount + 1, elapsed.getSeconds(), RECLAIM_IDLE_TIME.getSeconds() - elapsed.getSeconds());
                 continue;
             } // idle 30초 안 지났으면 아직 처리 중일 수 있으니 스킵
 
@@ -157,6 +166,19 @@ public class ReviewStreamWorker {
 
         ack(record.getId()); // 원본 스트림에서는 제거
         log.info("DLQ로 이동 완료: {} → {}", record.getId(), StreamNames.DLQ);
+
+        notifyDlqFailure(payload);
+    }
+
+    private void notifyDlqFailure(String payload) {
+        try {
+            ReviewJob job = objectMapper.readValue(payload, ReviewJob.class);
+            String repository = job.request().repository();
+            slackService.sendMessage("⚠ [ " + repository + " ]" + " 리뷰 생성에 실패했습니다. 재시도 " + MAX_RETRY + " 회 초과.");
+        }catch (Exception e){
+            log.error("DLQ 실패 알림 전송 중 오류", e);
+            slackService.sendMessage("⚠ 리뷰 생성에 실패했습니다.");
+        }
     }
 
 
