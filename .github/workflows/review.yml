@@ -27,23 +27,22 @@ jobs:
             echo "COMMIT_MESSAGE<<EOF"
             git log -1 --pretty=%B
             echo "EOF"
-
-            echo "AUTHOR=${{ github.actor }}"
-            echo "REPOSITORY=${{ github.repository }}"
           } >> $GITHUB_ENV
 
       - name: Create payload
         run: |
           jq -n \
           --arg diff "$DIFF" \
-          --arg author "$AUTHOR" \
-          --arg repository "$REPOSITORY" \
+          --arg author "${{ github.actor }}" \
+          --arg repository "${{ github.repository }}" \
           --arg commitMessage "$COMMIT_MESSAGE" \
+          --arg runId "${{ github.run_id }}" \
           '{
             diff: $diff,
             author: $author,
             repository: $repository,
-            commitMessage: $commitMessage
+            commitMessage: $commitMessage,
+            run_id : $runId
           }' > payload.json
 
           cat payload.json

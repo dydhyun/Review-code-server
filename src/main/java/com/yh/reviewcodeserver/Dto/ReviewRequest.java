@@ -4,7 +4,8 @@ public record ReviewRequest(
         String diff,
         String author,
         String repository,
-        String commitMessage
+        String commitMessage,
+        String runId
 ) {
     public int getDiffSize() {
         if (diff == null || diff.isBlank()) {
