@@ -50,6 +50,15 @@ public class OpenRouterClient {
                         )
                 )
         );
+        //Map<String, Object> body = Map.of(
+        //                "model", "openai/gpt-oss-120b:free",
+        //                "messages", List.of(
+        //                        Map.of(
+        //                                "role", "user",
+        //                                "content", prompt
+        //                        )
+        //                )
+        //        );
 
         HttpEntity<Map<String, Object>> springToOpenRouterRequest =
                 new HttpEntity<>(body,headers);
@@ -96,8 +105,7 @@ public class OpenRouterClient {
             // - 일일 토큰 한도 초과 (무료 모델 사용 중)
             // - OpenRouter 자체 부하
             log.error("OpenRouter TooManyRequests error 발생 {}", e.getResponseBodyAsString());
-            return commitInfo +
-                    "⚠ OpenRouter Rate Limit 발생. 잠시 후 재시도해주세요.";
+            throw new IllegalStateException("OpenRouter Rate Limit 초과 재시도해주세요.", e);
         } catch (HttpClientErrorException e) {
 
             log.error("error 발생 {}", e.getResponseBodyAsString());
@@ -162,4 +170,5 @@ public class OpenRouterClient {
                 %s
                 """.formatted(diff);
     }
+
 }
