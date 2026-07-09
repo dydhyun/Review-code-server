@@ -2,7 +2,7 @@ package com.yh.reviewcodeserver.queue.worker;
 
 import com.yh.reviewcodeserver.queue.model.ReviewJob;
 import com.yh.reviewcodeserver.queue.model.StreamNames;
-import com.yh.reviewcodeserver.service.review.CodeReviewServiceImpl;
+import com.yh.reviewcodeserver.service.review.CodeReviewService;
 import com.yh.reviewcodeserver.service.slack.SlackService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -30,7 +30,7 @@ public class ReviewStreamWorker {
 
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
-    private final CodeReviewServiceImpl codeReviewServiceImpl;
+    private final CodeReviewService codeReviewService;
     private final SlackService slackService;
 
     // 직접구현 이후 Spring Data Redis의 StreamMessageListenerContainer로 변경
@@ -113,7 +113,8 @@ public class ReviewStreamWorker {
 
             ReviewJob job = objectMapper.readValue(payload, ReviewJob.class);
 
-            codeReviewServiceImpl.review(job.request());
+            String result = codeReviewService.review(job.request());
+            slackService.sendMessage(result);
 
             ack(record.getId());
             log.info("메세지 처리 완료 및 ACK: {}", record.getId());
