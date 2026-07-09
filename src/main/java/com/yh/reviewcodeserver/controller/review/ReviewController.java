@@ -38,7 +38,7 @@ public class ReviewController {
 
     @ResponseStatus(HttpStatus.ACCEPTED)
     @PostMapping("/{recordId}/retry")
-    public void retryReview(@PathVariable int recordId){
+    public void retryReview(@PathVariable String recordId){
         dlqService.retryReview(recordId);
     }
 
