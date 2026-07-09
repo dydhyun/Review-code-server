@@ -34,6 +34,7 @@ public class CodeReviewServiceTest {
                 "dydhyun",
                 "dydhyun/Review-code-server",
                 "feat: 테스트 코드 작성"
+                ,"1"
         );
     }
 
@@ -62,6 +63,7 @@ public class CodeReviewServiceTest {
                 "dydhyun",
                 "dydhyun/Review-code-server",
                 "feat: 테스트 코드 작성"
+                ,"1"
         );
 
         //when

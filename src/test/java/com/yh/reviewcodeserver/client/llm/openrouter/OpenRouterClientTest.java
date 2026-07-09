@@ -48,7 +48,8 @@ public class OpenRouterClientTest {
                 "test diff",
                 "dydhyun",
                 "dydhyun/Review-code-server",
-                "feat: 테스트 코드 작성"
+                "feat: 테스트 코드 작성",
+                "1"
         );
     }
 
@@ -168,6 +169,7 @@ public class OpenRouterClientTest {
                 "dydhyun",
                 "dydhyun/Review-code-server",
                 "feat: 테스트 코드 작성"
+                ,"1"
         );
 
         String result = openRouterClient.review(largeDiffRequest);
