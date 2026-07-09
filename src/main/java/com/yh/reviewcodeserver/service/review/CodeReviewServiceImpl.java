@@ -18,7 +18,7 @@ public class CodeReviewServiceImpl implements CodeReviewService{
 
         if (request.diff() == null || request.diff().isBlank()) {
             log.info("{} repo 커밋 발생. 검토사항 없음.", request.repository());
-            return null;
+            return request.getCommitInfo() + "검토할 코드 변경사항이 없습니다.";
         }
 
         String reviewResult = openRouterClient.review(request);

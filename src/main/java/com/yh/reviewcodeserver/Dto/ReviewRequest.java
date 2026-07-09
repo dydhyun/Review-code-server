@@ -13,4 +13,12 @@ public record ReviewRequest(
         }
         return diff.split("\n", -1).length;
     }
+
+    public String getCommitInfo() {
+        return """
+                Repository : %s
+                Author : %s
+                Commit : %s
+                """.formatted(repository, author, commitMessage);
+    }
 }

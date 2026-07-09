@@ -26,7 +26,7 @@ public class OpenRouterClient {
     private final OpenRouterProperties openRouterProperties;
 
     public String review(ReviewRequest actionsRequest){
-        String commitInfo = getCommitInfo(actionsRequest);
+        String commitInfo = actionsRequest.getCommitInfo();
         log.info(commitInfo);
 
         if (actionsRequest.getDiffSize() > 1000){
@@ -112,21 +112,6 @@ public class OpenRouterClient {
             return commitInfo +
                     "⚠ 리뷰 생성 실패: " + e.getStatusCode();
         }
-    }
-
-
-
-    private String getCommitInfo(ReviewRequest actionsRequest) {
-
-        String repository = actionsRequest.repository();
-        String authorName = actionsRequest.author();
-        String commitMessage = actionsRequest.commitMessage();
-
-        return """
-                Repository : %s
-                Author : %s
-                Commit : %s
-                """.formatted(repository,authorName,commitMessage);
     }
 
 
