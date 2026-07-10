@@ -4,4 +4,4 @@ public record OpenAiRequest(
         String model,
         String input
 ) {
-}
+}//gpt api
