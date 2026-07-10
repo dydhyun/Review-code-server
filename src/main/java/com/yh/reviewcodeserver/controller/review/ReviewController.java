@@ -1,6 +1,6 @@
 package com.yh.reviewcodeserver.controller.review;
 
-import com.yh.reviewcodeserver.Dto.ReviewRequest;
+import com.yh.reviewcodeserver.dto.ReviewRequest;
 import com.yh.reviewcodeserver.queue.model.DlqItem;
 import com.yh.reviewcodeserver.queue.service.DlqService;
 import com.yh.reviewcodeserver.queue.service.RedisQueueService;

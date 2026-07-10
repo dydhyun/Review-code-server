@@ -1,6 +1,6 @@
 package com.yh.reviewcodeserver.queue.service;
 
-import com.yh.reviewcodeserver.Dto.ReviewRequest;
+import com.yh.reviewcodeserver.dto.ReviewRequest;
 import com.yh.reviewcodeserver.queue.model.ReviewJob;
 import com.yh.reviewcodeserver.queue.model.StreamNames;
 import lombok.RequiredArgsConstructor;

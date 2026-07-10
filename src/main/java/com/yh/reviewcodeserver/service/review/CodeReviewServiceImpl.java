@@ -1,7 +1,8 @@
 package com.yh.reviewcodeserver.service.review;
 
-import com.yh.reviewcodeserver.Dto.ReviewRequest;
+import com.yh.reviewcodeserver.dto.ReviewRequest;
 import com.yh.reviewcodeserver.client.llm.openrouter.OpenRouterClient;
+import com.yh.reviewcodeserver.repository.review.ReviewHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -12,6 +13,7 @@ import org.springframework.stereotype.Service;
 public class CodeReviewServiceImpl implements CodeReviewService{
 
     private final OpenRouterClient openRouterClient;
+    private final ReviewHistoryRepository reviewHistoryRepository;
 
     @Override
     public String review(ReviewRequest request) {
@@ -23,6 +25,11 @@ public class CodeReviewServiceImpl implements CodeReviewService{
 
         String reviewResult = openRouterClient.review(request);
         return  reviewResult;
+    }
+
+    @Override
+    public void saveSuccessReview() {
+        reviewHistoryRepository.saveReview();
     }
 
 }

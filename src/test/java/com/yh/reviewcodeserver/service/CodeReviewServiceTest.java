@@ -1,6 +1,6 @@
 package com.yh.reviewcodeserver.service;
 
-import com.yh.reviewcodeserver.Dto.ReviewRequest;
+import com.yh.reviewcodeserver.dto.ReviewRequest;
 import com.yh.reviewcodeserver.client.llm.openrouter.OpenRouterClient;
 import com.yh.reviewcodeserver.service.review.CodeReviewServiceImpl;
 import com.yh.reviewcodeserver.service.slack.SlackService;

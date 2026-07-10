@@ -1,7 +1,7 @@
 package com.yh.reviewcodeserver.client.llm.openrouter;
 
-import com.yh.reviewcodeserver.Dto.ReviewRequest;
-import com.yh.reviewcodeserver.Dto.openrouter.OpenRouterResponse;
+import com.yh.reviewcodeserver.dto.ReviewRequest;
+import com.yh.reviewcodeserver.dto.openrouter.OpenRouterResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
