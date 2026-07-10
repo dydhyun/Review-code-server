@@ -1,5 +1,6 @@
 package com.yh.reviewcodeserver.queue.worker;
 
+import com.yh.reviewcodeserver.dto.ReviewResult;
 import com.yh.reviewcodeserver.queue.model.ReviewJob;
 import com.yh.reviewcodeserver.queue.model.StreamNames;
 import com.yh.reviewcodeserver.service.review.CodeReviewService;
@@ -113,8 +114,12 @@ public class ReviewStreamWorker {
 
             ReviewJob job = objectMapper.readValue(payload, ReviewJob.class);
 
-            String result = codeReviewService.review(job.request());
-            slackService.sendMessage(result);
+            ReviewResult result = codeReviewService.review(job.request());
+            slackService.sendMessage(result.contents());
+
+            if(!result.hasUsage()) {
+                codeReviewService.saveSuccessReview(job.request(), result);
+            }
 
             ack(record.getId());
             log.info("메세지 처리 완료 및 ACK: {}", record.getId());

@@ -1,6 +1,7 @@
 package com.yh.reviewcodeserver.queue.service;
 
 import com.yh.reviewcodeserver.dto.ReviewRequest;
+import com.yh.reviewcodeserver.dto.ReviewResult;
 import com.yh.reviewcodeserver.queue.model.DlqItem;
 import com.yh.reviewcodeserver.queue.model.ReviewJob;
 import com.yh.reviewcodeserver.queue.model.StreamNames;
@@ -53,7 +54,7 @@ public class DlqService {
         Boolean acquired = redisTemplate.opsForValue()
                 .setIfAbsent(lockKey,"1", LOCK_TIMEOUT);
         // 키가 존재한다면 false 저장
-        if (acquired.equals(Boolean.FALSE)){
+        if (!Boolean.TRUE.equals(acquired)) {
             throw new IllegalStateException("이미 처리중인 DLQ 항목입니다:" + recordId);
         }
 
@@ -62,12 +63,16 @@ public class DlqService {
             ReviewJob job = objectMapper.readValue(payload, ReviewJob.class);
             ReviewRequest reviewRequest = job.request();
 
-            String result = codeReviewService.review(reviewRequest);
-            if (result != null){
-                slackService.sendMessage("🔄[DLQ 복구 성공] " + reviewRequest.repository() + "\n" + result);
+            ReviewResult result = codeReviewService.review(reviewRequest);
+            if (result.hasUsage()){
+                slackService.sendMessage("🔄[DLQ 복구 성공] " + reviewRequest.repository() + "\n" + result.contents());
+                redisTemplate.opsForStream().delete(StreamNames.DLQ, RecordId.of(recordId));
+                codeReviewService.saveSuccessReview(reviewRequest, result);
+                log.info("DLQ 수동 재처리 성공, 삭제 완료: {}", recordId);
+            } else {
+                log.info("DLQ 재처리 실패: {}", recordId);
+                slackService.sendMessage("⚠ DLQ 재처리 실패: " + recordId + "\n" + result.contents());
             }
-            redisTemplate.opsForStream().delete(StreamNames.DLQ, RecordId.of(recordId));
-            log.info("DLQ 수동 재처리 성공, 삭제 완료: {}", recordId);
 
         } catch (Exception e){
             log.error("DLQ 수동 재처리 실패: {}", recordId, e);

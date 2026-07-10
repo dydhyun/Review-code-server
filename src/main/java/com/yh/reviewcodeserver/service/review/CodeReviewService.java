@@ -1,10 +1,11 @@
 package com.yh.reviewcodeserver.service.review;
 
 import com.yh.reviewcodeserver.dto.ReviewRequest;
+import com.yh.reviewcodeserver.dto.ReviewResult;
 
 public interface CodeReviewService {
-    String review(ReviewRequest request);
+    ReviewResult review(ReviewRequest request);
 
-    void saveSuccessReview();
+    void saveSuccessReview(ReviewRequest reviewRequest, ReviewResult reviewResult);
 
 }
