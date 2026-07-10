@@ -37,12 +37,14 @@ jobs:
           --arg repository "${{ github.repository }}" \
           --arg commitMessage "$COMMIT_MESSAGE" \
           --arg runId "${{ github.run_id }}" \
+          --arg commitId "${{ github.sha }}" \
           '{
             diff: $diff,
             author: $author,
             repository: $repository,
             commitMessage: $commitMessage,
-            run_id : $runId
+            runId: $runId,
+            commitId: $commitId
           }' > payload.json
 
           cat payload.json

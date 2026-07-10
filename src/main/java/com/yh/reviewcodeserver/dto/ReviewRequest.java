@@ -5,6 +5,7 @@ public record ReviewRequest(
         String author,
         String repository,
         String commitMessage,
+        String commitId,
         String runId
 ) {
     public int getDiffSize() {
