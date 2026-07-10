@@ -1,5 +1,6 @@
 package com.yh.reviewcodeserver.service.review;
 
+import com.yh.reviewcodeserver.dto.ReviewHistoryDto;
 import com.yh.reviewcodeserver.dto.ReviewRequest;
 import com.yh.reviewcodeserver.client.llm.openrouter.OpenRouterClient;
 import com.yh.reviewcodeserver.dto.ReviewResult;
@@ -7,6 +8,8 @@ import com.yh.reviewcodeserver.entity.ReviewHistoryEntity;
 import com.yh.reviewcodeserver.repository.review.ReviewHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 @Slf4j
@@ -43,4 +46,9 @@ public class CodeReviewServiceImpl implements CodeReviewService{
         reviewHistoryRepository.save(reviewHistory);
     }
 
+    @Override
+    public Page<ReviewHistoryDto> getReviewHistories(Pageable pageable) {
+        return reviewHistoryRepository.findAllByOrderByCreatedAtDesc(pageable)
+                .map(ReviewHistoryDto::from);
+    }
 }
