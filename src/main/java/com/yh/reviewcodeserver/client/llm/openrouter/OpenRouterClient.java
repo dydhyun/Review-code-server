@@ -1,6 +1,7 @@
 package com.yh.reviewcodeserver.client.llm.openrouter;
 
 import com.yh.reviewcodeserver.dto.ReviewRequest;
+import com.yh.reviewcodeserver.dto.ReviewResult;
 import com.yh.reviewcodeserver.dto.openrouter.OpenRouterResponse;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -25,12 +26,12 @@ public class OpenRouterClient {
     private final RestTemplate restTemplate;
     private final OpenRouterProperties openRouterProperties;
 
-    public String review(ReviewRequest actionsRequest){
+    public ReviewResult review(ReviewRequest actionsRequest){
         String commitInfo = actionsRequest.getCommitInfo();
         log.info(commitInfo);
 
         if (actionsRequest.getDiffSize() > 1000){
-            return commitInfo + "변경사항이 많아 리뷰를 생략합니다.";
+            return ReviewResult.withoutUsage(commitInfo + "변경사항이 많아 리뷰를 생략합니다.");
         }
 
         String diff = actionsRequest.diff();
@@ -50,15 +51,6 @@ public class OpenRouterClient {
                         )
                 )
         );
-        //Map<String, Object> body = Map.of(
-        //                "model", "openai/gpt-oss-120b:free",
-        //                "messages", List.of(
-        //                        Map.of(
-        //                                "role", "user",
-        //                                "content", prompt
-        //                        )
-        //                )
-        //        );
 
         HttpEntity<Map<String, Object>> springToOpenRouterRequest =
                 new HttpEntity<>(body,headers);
@@ -85,18 +77,20 @@ public class OpenRouterClient {
 
             List<OpenRouterResponse.Choice> openRouterChoices = responseBody.getChoices();
 
-            List<Integer> usages = List.of(
-                    responseBody.getUsage().getPrompt_tokens(),
-                    responseBody.getUsage().getCompletion_tokens(),
-                    responseBody.getUsage().getTotal_tokens());
-
             if (openRouterChoices == null || openRouterChoices.isEmpty()) {
                 throw new IllegalStateException("OpenRouter AI 응답이 비어있습니다.");
             }
-            log.info("토큰사용량 : {}", usages);
-            return commitInfo +
+
+            int promptTokens = responseBody.getUsage().getPrompt_tokens();
+            int completionTokens = responseBody.getUsage().getCompletion_tokens();
+
+            log.info("토큰사용량 : {}, {}", promptTokens, completionTokens);
+
+            String content = commitInfo +
                     "\uD83E\uDD16 AI Review \n" +
                     openRouterChoices.get(0).getMessage().getContent();
+
+            return new ReviewResult(content,promptTokens, completionTokens);
 
 
         } catch (HttpClientErrorException.TooManyRequests e) {
@@ -109,8 +103,8 @@ public class OpenRouterClient {
         } catch (HttpClientErrorException e) {
 
             log.error("error 발생 {}", e.getResponseBodyAsString());
-            return commitInfo +
-                    "⚠ 리뷰 생성 실패: " + e.getStatusCode();
+            return ReviewResult
+                    .withoutUsage(commitInfo + "⚠ 리뷰 생성 실패: " + e.getStatusCode());
         }
     }
 
