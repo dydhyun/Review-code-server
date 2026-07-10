@@ -7,6 +7,4 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface ReviewHistoryRepository extends JpaRepository<ReviewHistoryEntity, Long> {
 
-    void saveReview();
-
 }
