@@ -1,4 +1,4 @@
-package com.yh.reviewcodeserver.Dto.openrouter;
+package com.yh.reviewcodeserver.dto.openrouter;
 
 import lombok.Getter;
 import lombok.Setter;

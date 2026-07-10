@@ -1,4 +1,4 @@
-package com.yh.reviewcodeserver.Dto;
+package com.yh.reviewcodeserver.dto;
 
 public record ReviewRequest(
         String diff,
