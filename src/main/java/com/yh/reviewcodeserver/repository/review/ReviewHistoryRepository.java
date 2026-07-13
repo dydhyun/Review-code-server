@@ -1,5 +1,6 @@
 package com.yh.reviewcodeserver.repository.review;
 
+import com.yh.reviewcodeserver.dto.ReviewHistoryDto;
 import com.yh.reviewcodeserver.entity.ReviewHistoryEntity;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -13,4 +14,5 @@ public interface ReviewHistoryRepository extends JpaRepository<ReviewHistoryEnti
 
     Page<ReviewHistoryEntity> findAllByOrderByCreatedAtDesc(Pageable pageable);
 
+    Page<ReviewHistoryDto> findByRepositoryOrderByCreatedAtDesc(String repository, Pageable pageable);
 }

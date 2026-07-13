@@ -36,18 +36,28 @@ public class ReviewController {
     }
 
     @GetMapping
-    public Page<ReviewHistoryDto> getReviewHistories(@PageableDefault(size = 20) Pageable pageable){
+    public Page<ReviewHistoryDto> getReviewHistories(
+            @RequestParam(required = false) String repository,
+            @PageableDefault(size = 20) Pageable pageable){
+
+        if (repository != null && !repository.isBlank()) {
+            return codeReviewService.getReviewHistoriesByRepository(pageable, repository);
+        }
         return codeReviewService.getReviewHistories(pageable);
     }
 
-// dql controller 분리예정
+    @GetMapping("/{id}")
+    public ReviewHistoryDto getReviewHistory(@PathVariable Long id){
+        return codeReviewService.getReviewHistory(id);
+    }
+
     @GetMapping("/failed")
     public List<DlqItem> getFailedReviews(
             @RequestParam(defaultValue = "0") int startIndex,
             @RequestParam(defaultValue = "10") int count){
         List<DlqItem> failedReviews = dlqService.getFailedReviews(startIndex, count);
         return failedReviews;
-    }
+    }// TODO: 페이징처리 통일하기
 
     @ResponseStatus(HttpStatus.ACCEPTED)
     @PostMapping("/{recordId}/retry")

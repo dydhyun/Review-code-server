@@ -51,4 +51,16 @@ public class CodeReviewServiceImpl implements CodeReviewService{
         return reviewHistoryRepository.findAllByOrderByCreatedAtDesc(pageable)
                 .map(ReviewHistoryDto::from);
     }
+
+    @Override
+    public Page<ReviewHistoryDto> getReviewHistoriesByRepository(Pageable pageable, String repository) {
+        return reviewHistoryRepository.findByRepositoryOrderByCreatedAtDesc(repository, pageable);
+    }
+
+    @Override
+    public ReviewHistoryDto getReviewHistory(Long id) {
+        ReviewHistoryEntity history = reviewHistoryRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("해당 리뷰 이력을 찾을 수 없습니다."));
+        return ReviewHistoryDto.from(history);
+    }
 }

@@ -13,4 +13,7 @@ public interface CodeReviewService {
 
     Page<ReviewHistoryDto> getReviewHistories(Pageable pageable);
 
+    Page<ReviewHistoryDto> getReviewHistoriesByRepository(Pageable pageable, String repository);
+
+    ReviewHistoryDto getReviewHistory(Long id);
 }
