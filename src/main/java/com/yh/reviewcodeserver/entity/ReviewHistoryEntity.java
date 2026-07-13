@@ -1,9 +1,6 @@
 package com.yh.reviewcodeserver.entity;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
@@ -25,6 +22,8 @@ public class ReviewHistoryEntity {
     private String author;
     private String repository;
     private String commitId;
+
+    @Column(columnDefinition = "TEXT")
     private String review;
 
     private Integer promptTokens;
