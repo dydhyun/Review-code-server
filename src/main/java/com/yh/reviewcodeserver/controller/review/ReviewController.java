@@ -31,7 +31,7 @@ public class ReviewController {
 
     @ResponseStatus(HttpStatus.ACCEPTED)
     @PostMapping
-    public void review(@RequestBody ReviewRequest request){
+    public void requestReview(@RequestBody ReviewRequest request){
         redisQueueService.enqueue(request);
     }
 
@@ -42,7 +42,7 @@ public class ReviewController {
 
 // dql controller 분리예정
     @GetMapping("/failed")
-    public List<DlqItem> getFailedReview(
+    public List<DlqItem> getFailedReviews(
             @RequestParam(defaultValue = "0") int startIndex,
             @RequestParam(defaultValue = "10") int count){
         List<DlqItem> failedReviews = dlqService.getFailedReviews(startIndex, count);
