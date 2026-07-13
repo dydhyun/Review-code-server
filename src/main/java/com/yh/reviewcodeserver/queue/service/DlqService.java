@@ -58,6 +58,7 @@ public class DlqService {
             throw new IllegalStateException("이미 처리중인 DLQ 항목입니다:" + recordId);
         }
 
+
         try {
             String payload = findPayload(recordId);
             ReviewJob job = objectMapper.readValue(payload, ReviewJob.class);
@@ -76,7 +77,7 @@ public class DlqService {
 
         } catch (Exception e){
             log.error("DLQ 수동 재처리 실패: {}", recordId, e);
-            slackService.sendMessage("⚠ DLQ 수동 재처리 실패: " + recordId);
+            slackService.sendMessage("⚠ DLQ 수동 재처리 실패: " + recordId + "\n원인: " + e.getMessage());
         } finally {
             redisTemplate.delete(lockKey);
         }
