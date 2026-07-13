@@ -117,7 +117,7 @@ public class ReviewStreamWorker {
             ReviewResult result = codeReviewService.review(job.request());
             slackService.sendMessage(result.contents());
 
-            if(!result.hasUsage()) {
+            if(result.hasUsage()) {
                 codeReviewService.saveSuccessReview(job.request(), result);
             }
 
