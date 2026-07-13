@@ -3,7 +3,6 @@ package com.yh.reviewcodeserver.queue.service;
 import com.yh.reviewcodeserver.dto.ReviewRequest;
 import com.yh.reviewcodeserver.dto.ReviewResult;
 import com.yh.reviewcodeserver.queue.model.DlqItem;
-import com.yh.reviewcodeserver.queue.model.ReviewJob;
 import com.yh.reviewcodeserver.queue.model.StreamNames;
 import com.yh.reviewcodeserver.service.review.CodeReviewService;
 import com.yh.reviewcodeserver.service.slack.SlackService;
@@ -61,8 +60,7 @@ public class DlqService {
 
         try {
             String payload = findPayload(recordId);
-            ReviewJob job = objectMapper.readValue(payload, ReviewJob.class);
-            ReviewRequest reviewRequest = job.request();
+            ReviewRequest reviewRequest = objectMapper.readValue(payload, ReviewRequest.class);
 
             ReviewResult result = codeReviewService.review(reviewRequest);
             if (result.hasUsage()){

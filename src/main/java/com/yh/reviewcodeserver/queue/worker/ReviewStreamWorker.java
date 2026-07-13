@@ -1,7 +1,7 @@
 package com.yh.reviewcodeserver.queue.worker;
 
+import com.yh.reviewcodeserver.dto.ReviewRequest;
 import com.yh.reviewcodeserver.dto.ReviewResult;
-import com.yh.reviewcodeserver.queue.model.ReviewJob;
 import com.yh.reviewcodeserver.queue.model.StreamNames;
 import com.yh.reviewcodeserver.service.review.CodeReviewService;
 import com.yh.reviewcodeserver.service.slack.SlackService;
@@ -112,13 +112,13 @@ public class ReviewStreamWorker {
 
             String payload = (String) record.getValue().get("payload");
 
-            ReviewJob job = objectMapper.readValue(payload, ReviewJob.class);
+            ReviewRequest reviewRequest = objectMapper.readValue(payload, ReviewRequest.class);
 
-            ReviewResult result = codeReviewService.review(job.request());
+            ReviewResult result = codeReviewService.review(reviewRequest);
             slackService.sendMessage(result.contents());
 
             if(result.hasUsage()) {
-                codeReviewService.saveSuccessReview(job.request(), result);
+                codeReviewService.saveSuccessReview(reviewRequest, result);
             }
 
             ack(record.getId());
@@ -178,8 +178,8 @@ public class ReviewStreamWorker {
 
     private void notifyDlqFailure(String payload) {
         try {
-            ReviewJob job = objectMapper.readValue(payload, ReviewJob.class);
-            String repository = job.request().repository();
+            ReviewRequest reviewRequest = objectMapper.readValue(payload, ReviewRequest.class);
+            String repository = reviewRequest.repository();
             slackService.sendMessage("⚠ [ " + repository + " ]" + " 리뷰 생성에 실패했습니다. 재시도 " + MAX_RETRY + " 회 초과.");
         }catch (Exception e){
             log.error("DLQ 실패 알림 전송 중 오류", e);

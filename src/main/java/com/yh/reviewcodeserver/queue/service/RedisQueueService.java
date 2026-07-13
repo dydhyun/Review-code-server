@@ -1,7 +1,6 @@
 package com.yh.reviewcodeserver.queue.service;
 
 import com.yh.reviewcodeserver.dto.ReviewRequest;
-import com.yh.reviewcodeserver.queue.model.ReviewJob;
 import com.yh.reviewcodeserver.queue.model.StreamNames;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.connection.stream.StreamRecords;
@@ -21,10 +20,8 @@ public class RedisQueueService {
 
     public void enqueue(ReviewRequest request) {
 
-        ReviewJob job = new ReviewJob(request);
-
         try {
-            String payload = objectMapper.writeValueAsString(job);
+            String payload = objectMapper.writeValueAsString(request);
 
             Map<String, String> body = Map.of(
                     "payload", payload
