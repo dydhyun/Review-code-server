@@ -4,6 +4,7 @@ import com.yh.reviewcodeserver.dto.ReviewRequest;
 import com.yh.reviewcodeserver.dto.ReviewResult;
 import com.yh.reviewcodeserver.queue.model.DlqItem;
 import com.yh.reviewcodeserver.queue.model.StreamNames;
+import com.yh.reviewcodeserver.queue.worker.ReviewStreamInitializer;
 import com.yh.reviewcodeserver.service.review.CodeReviewService;
 import com.yh.reviewcodeserver.service.slack.SlackService;
 import lombok.RequiredArgsConstructor;
@@ -12,17 +13,20 @@ import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Range;
 import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.connection.stream.RecordId;
+import org.springframework.data.redis.connection.stream.StreamRecords;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
 public class DlqService {
 
+    private static final int MAX_RETRY = 5;
     private static final Duration LOCK_TIMEOUT = Duration.ofSeconds(30);
     private static final Logger log = LoggerFactory.getLogger(DlqService.class);
 
@@ -90,6 +94,62 @@ public class DlqService {
             throw new IllegalArgumentException("DLQ에서 해당 항목을 찾을 수 없습니다:" + recordId);
         }
         return (String) found.get(0).getValue().get("payload");
+    }
+
+
+
+    // reclaimAndRetry에서 호출: ID만 있으니 내용을 조회해서 옮김
+    public void moveToDlq(RecordId id, long attemptNumber) {
+        List<MapRecord<String, Object, Object>> found = redisTemplate.opsForStream().range(
+                StreamNames.REVIEW,
+                Range.closed(id.getValue(), id.getValue())
+        );
+
+        if (found.isEmpty()) {
+            log.warn("DLQ 이동 대상 메세지를 찾을 수 없음: {}", id);
+            ack(id);
+            return;
+        }
+
+        moveToDlq(found.get(0), attemptNumber);
+    }
+
+    // handleRecord에서 호출: 이미 내용을 갖고 있으니 바로 사용
+    private void moveToDlq(MapRecord<String, Object, Object> record, long attemptNumber) {
+        String payload = (String) record.getValue().get("payload");
+
+        Map<String, String> dlqBody = Map.of(
+                "payload", payload,
+                "originalId", record.getId().getValue(),
+                "failedAttemptCount", String.valueOf(attemptNumber)
+        );
+
+        redisTemplate.opsForStream().add(
+                StreamRecords.newRecord()
+                        .in(StreamNames.DLQ)
+                        .ofMap(dlqBody)
+        );
+
+        ack(record.getId()); // 원본 스트림에서는 제거
+        log.info("DLQ로 이동 완료: {} → {}", record.getId(), StreamNames.DLQ);
+
+        notifyDlqFailure(payload);
+    }
+
+    private void ack(RecordId id) {
+        redisTemplate.opsForStream()
+                .acknowledge(StreamNames.REVIEW, ReviewStreamInitializer.GROUP_NAME, id);
+    }
+
+    private void notifyDlqFailure(String payload) {
+        try {
+            ReviewRequest reviewRequest = objectMapper.readValue(payload, ReviewRequest.class);
+            String repository = reviewRequest.repository();
+            slackService.sendMessage("⚠ [ " + repository + " ]" + " 리뷰 생성에 실패했습니다. 재시도 " + MAX_RETRY + " 회 초과.");
+        }catch (Exception e){
+            log.error("DLQ 실패 알림 전송 중 오류", e);
+            slackService.sendMessage("⚠ 리뷰 생성에 실패했습니다.");
+        }
     }
 
 }
