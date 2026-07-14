@@ -53,7 +53,7 @@ public class CodeReviewServiceImpl implements CodeReviewService{
     }
 
     @Override
-    public Page<ReviewHistoryDto> getReviewHistoriesByRepository(Pageable pageable, String repository) {
+    public Page<ReviewHistoryDto> getReviewHistoriesByRepository(String repository, Pageable pageable) {
         return reviewHistoryRepository.findByRepositoryOrderByCreatedAtDesc(repository, pageable);
     }
 

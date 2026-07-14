@@ -41,7 +41,7 @@ public class ReviewController {
             @PageableDefault(size = 20) Pageable pageable){
 
         if (repository != null && !repository.isBlank()) {
-            return codeReviewService.getReviewHistoriesByRepository(pageable, repository);
+            return codeReviewService.getReviewHistoriesByRepository(repository, pageable);
         }
         return codeReviewService.getReviewHistories(pageable);
     }
