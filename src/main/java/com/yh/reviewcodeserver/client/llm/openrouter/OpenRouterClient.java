@@ -43,7 +43,8 @@ public class OpenRouterClient {
         headers.setContentType(MediaType.APPLICATION_JSON);
 
         Map<String, Object> body = Map.of(
-                "model", "openai/gpt-oss-120b:free",
+//                "model", "openai/gpt-oss-120b:free",
+                "model", "poolside/laguna-m.1:free",
                 "messages", List.of(
                         Map.of(
                                 "role", "user",
