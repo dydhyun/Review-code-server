@@ -10,6 +10,9 @@ import com.yh.reviewcodeserver.service.slack.SlackService;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Range;
 import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.connection.stream.RecordId;
@@ -19,6 +22,7 @@ import org.springframework.stereotype.Service;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -35,20 +39,30 @@ public class DlqService {
     private final CodeReviewService codeReviewService;
     private final SlackService slackService;
 
-    public List<DlqItem> getFailedReviews(int startIndex, int count){
+    public Page<DlqItem> getFailedReviews(Pageable pageable){
 
         List<MapRecord<String, Object, Object>> records = redisTemplate.opsForStream()
                 .range(StreamNames.DLQ, Range.unbounded());
 
         if (records == null || records.isEmpty()){
-            return List.of();
+            return Page.empty();
         }
-        return records.stream()
-                .skip(startIndex)
-                .limit(count)
+
+        List<DlqItem> allItems = records.stream()
                 .map(record -> new DlqItem(
                         record.getId().getValue(),
                         (String) record.getValue().get("payload"))).toList();
+
+        int start = (int) pageable.getOffset();
+
+        if (start >= allItems.size()){
+            return new PageImpl<>(Collections.emptyList(), pageable, allItems.size());
+        }
+
+        int end = Math.min(start + pageable.getPageSize(), allItems.size());
+        List<DlqItem> pageContent = allItems.subList(start, end);
+
+        return new PageImpl<>(pageContent, pageable, allItems.size());
     }
 
     public void retryReview(String recordId) {
