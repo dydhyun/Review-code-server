@@ -14,7 +14,9 @@ GitHub Repository에 Push가 발생하면 GitHub Actions가 변경된 Diff를 �
 
 Push 요청은 Redis Stream 기반 큐에 적재되어 비동기로 처리되며, 실패한 리뷰는 자동 재시도 후 DLQ(Dead Letter Queue)로 이동해 안전하게 관리됩니다. 생성된 리뷰는 PostgreSQL에 이력으로 저장되어 Slack 채널을 뒤지지 않아도 API로 언제든 조회할 수 있습니다.
 
-향후에는 단순 Diff 기반 리뷰를 넘어 프로젝트 구조까지 이해하는 RAG(Retrieval Augmented Generation) 기반 리뷰 시스템으로, 나아가 여러 Repository를 함께 관리하는 시스템으로 확장하는 것을 목표로 합니다.
+여러 Repository의 Push를 함께 수신하며, Repository별로 지정된 Slack 채널로 리뷰 결과를 분리하여 전달합니다.
+
+향후에는 단순 Diff 기반 리뷰를 넘어 프로젝트 구조까지 이해하는 RAG(Retrieval Augmented Generation) 기반 리뷰 시스템으로 확장하는 것을 목표로 합니다.
 
 ---
 
@@ -23,9 +25,9 @@ Push 요청은 Redis Stream 기반 큐에 적재되어 비동기로 처리되며
 ### 현재 아키텍처
 
 ```text
-GitHub Repository (push)
+GitHub Repository A, B, ... (push)
       ↓
-GitHub Actions
+GitHub Actions (Repository별 workflow)
       ↓ (Diff + commitId + runId 전송)
 Review Server (Controller)
       ↓ (job 등록, XADD)
@@ -37,7 +39,7 @@ OpenRouter
       ↓ (Review + 토큰 사용량 반환)
 Worker
       ↓
-Slack 전송
+Slack 전송 (Repository별 채널 분기)
       ↓ (성공 시)
 PostgreSQL (Review History 저장)
       ↓
@@ -54,6 +56,9 @@ Redis Stream에 저장된 리뷰 요청을 주기적으로 소비(Consume)하여
 
 **DlqService** :
 DLQ 관련 로직을 전담하는 컴포넌트입니다. 재시도를 모두 실패한 요청을 DLQ 스트림에 적재하고 실패를 Slack으로 알리며, DLQ 조회 API와 개별 항목 수동 재처리 API(중복 처리 방지 락 포함)를 제공합니다.
+
+**SlackClient / SlackProperties** :
+Repository별 Slack 채널 분기를 담당합니다. `slack.webhooks` 맵에 등록된 Repository(`owner/repo` 형식)가 있으면 해당 채널로, 없으면 기본 webhook-url로 fallback하여 전송합니다. 채널 설정 누락이 재시도/DLQ 로직에 영향을 주지 않도록 예외를 던지지 않고 fallback으로 처리합니다.
 
 **Review History** :
 성공적으로 생성된 리뷰(OpenRouter 응답에 실제 토큰 사용량이 있는 경우)는 PostgreSQL에 저장됩니다. Slack 전송 이후 저장하는 구조로, 저장 이력을 통해 최근 리뷰, 레포지토리별 리뷰, 특정 리뷰 단건을 API로 조회할 수 있습니다.
@@ -95,9 +100,9 @@ GitHub Push 발생 시 Actions가 변경사항 Diff와 커밋 식별자(commitId
 
 OpenRouter API를 활용하여 심각도([HIGH], [MEDIUM], [LOW]) 기준으로 코드 리뷰 생성. 응답에 포함된 토큰 사용량(promptTokens, completionTokens)을 추출해 이력에 함께 저장
 
-### Slack 알림
+### Slack 알림 (Repository별 채널 분기)
 
-리뷰 결과를 Slack 채널로 전송. 검토할 변경사항이 없는 경우에도 안내 메시지 전송
+리뷰 결과를 Slack 채널로 전송. Repository별로 지정된 채널이 있으면 해당 채널로, 없으면 기본 채널로 전송. 검토할 변경사항이 없는 경우에도 안내 메시지 전송
 
 ### 대용량 Diff 보호
 
@@ -114,6 +119,10 @@ Redis Stream 기반 큐로 Webhook 요청을 즉시 저장하고, Worker가 별�
 ### DLQ 관리 및 수동 재처리
 
 재시도를 모두 실패한 요청은 DLQ로 이동해 보관하며, 목록 조회 및 개별 항목 수동 재처리 API 제공
+
+### Multi Repository 지원
+
+여러 Repository의 Push를 하나의 서버가 함께 수신하며, Repository별로 Slack 채널을 분리하여 리뷰 결과를 전달
 
 ### Review History 관리
 
@@ -137,10 +146,6 @@ Repository 단위 MDC 로깅으로 요청 흐름 추적, OpenRouter 응답 시�
 변경 코드와 관련 클래스 검색 후 함께 리뷰
 Diff 뿐 아니라 프로젝트 맥락을 파악한 리뷰 제공
 
-### Multi Repository 지원 (예정)
-
-여러 Repository를 등록하고 레포별로 리뷰/알림 채널을 관리
-
 ---
 
 ## 기술 스택
@@ -159,12 +164,12 @@ Diff 뿐 아니라 프로젝트 맥락을 파악한 리뷰 제공
 
 ### DevOps
 
-* GitHub Actions
+* GitHub Actions (Repository별 workflow + Secrets)
 * Docker Compose
 
 ### Messaging
 
-* Slack Webhook
+* Slack Webhook (Repository별 채널 분기)
 
 ### Queue
 
@@ -203,6 +208,12 @@ Diff 뿐 아니라 프로젝트 맥락을 파악한 리뷰 제공
 * ReviewHistory 엔티티 저장 (author, repository, commitId, review, promptTokens, completionTokens, cost, createdAt)
 * 리뷰 이력 목록 / 레포지토리별 목록 / 단건 조회 API (페이징 지원)
 
+### Multi Repository 지원
+* 각 원격저장소에 GitHub Actions workflow 및 Secrets 등록으로 다중 레포 Push 수신
+* `SlackProperties.webhooks` 맵 기반 Repository별 Slack 채널 분기 (`owner/repo` 형식 key, 대괄호 표기 사용)
+* 맵에 등록되지 않은 Repository는 예외 없이 기본 채널로 fallback (재시도/DLQ 오적재 방지)
+* 실제 다중 레포(`dydhyun/Blog-server`) 대상 실전 테스트 및 채널별 수신 확인 완료
+
 ### 운영 안정성
 * ApiKeyFilter(인증)
 * GlobalExceptionHandler (전역 예외 처리)
@@ -217,5 +228,4 @@ Diff 뿐 아니라 프로젝트 맥락을 파악한 리뷰 제공
 * DLQ 항목을 원본 Review Stream ID(originalId) 기준으로 조회/재처리하도록 개선
 * Page 응답 직렬화 안정화 (PagedModel 적용)
 * GitHub Actions에서 push 1건에 포함된 여러 커밋을 모두 반영하도록 Diff 추출 로직 개선
-* Multi Repository 지원
 * RAG 기반 프로젝트 문맥 분석
