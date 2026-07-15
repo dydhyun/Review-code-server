@@ -20,4 +20,10 @@ public class SlackServiceImpl implements SlackService{
         slackClient.sendMessage(message);
     }
 
+    @Override
+    public void sendMessage(String message, String repository) {
+
+        slackClient.sendMessage(message, repository);
+    }
+
 }
