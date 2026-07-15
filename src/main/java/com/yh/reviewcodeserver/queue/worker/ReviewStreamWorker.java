@@ -119,7 +119,7 @@ public class ReviewStreamWorker {
             ReviewRequest reviewRequest = objectMapper.readValue(payload, ReviewRequest.class);
 
             ReviewResult result = codeReviewService.review(reviewRequest);
-            slackService.sendMessage(result.contents());
+            slackService.sendMessage(result.contents(), reviewRequest.repository());
 
             if(result.hasUsage()) {
                 codeReviewService.saveSuccessReview(reviewRequest, result);
