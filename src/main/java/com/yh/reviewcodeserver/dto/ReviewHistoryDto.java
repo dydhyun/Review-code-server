@@ -1,6 +1,6 @@
 package com.yh.reviewcodeserver.dto;
 
-import com.yh.reviewcodeserver.entity.ReviewHistoryEntity;
+import com.yh.reviewcodeserver.entity.review.ReviewHistoryEntity;
 import lombok.Builder;
 import lombok.Getter;
 

@@ -1,4 +1,4 @@
-package com.yh.reviewcodeserver.entity;
+package com.yh.reviewcodeserver.entity.review;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;

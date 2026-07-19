@@ -4,7 +4,7 @@ import com.yh.reviewcodeserver.dto.ReviewHistoryDto;
 import com.yh.reviewcodeserver.dto.ReviewRequest;
 import com.yh.reviewcodeserver.client.llm.openrouter.OpenRouterClient;
 import com.yh.reviewcodeserver.dto.ReviewResult;
-import com.yh.reviewcodeserver.entity.ReviewHistoryEntity;
+import com.yh.reviewcodeserver.entity.review.ReviewHistoryEntity;
 import com.yh.reviewcodeserver.repository.review.ReviewHistoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
