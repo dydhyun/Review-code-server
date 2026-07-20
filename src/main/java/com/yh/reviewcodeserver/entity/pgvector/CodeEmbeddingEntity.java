@@ -8,8 +8,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "code_embeddings")
-@Getter
+@Table(
+        name = "code_embeddings",
+        uniqueConstraints = @UniqueConstraint(columnNames = {"repo_name", "file_path"})
+)@Getter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
