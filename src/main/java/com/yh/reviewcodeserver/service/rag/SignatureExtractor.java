@@ -1,5 +1,6 @@
 package com.yh.reviewcodeserver.service.rag;
 
+import com.github.javaparser.ParserConfiguration;
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
@@ -11,6 +12,9 @@ import org.springframework.stereotype.Component;
 public class SignatureExtractor {
 
     public String extract(SourceFile file) {
+        // 파싱전에 자바 17 레벨로 전역 설정을 변경
+        StaticJavaParser.getParserConfiguration().setLanguageLevel(ParserConfiguration.LanguageLevel.JAVA_17);
+
         CompilationUnit compilationUnit = StaticJavaParser.parse(file.content());
         StringBuilder sb = new StringBuilder();
 
