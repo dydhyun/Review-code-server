@@ -22,7 +22,7 @@ public class EmbeddingClient {
     @Value("${openrouter.api-key}")
     private String apiKey;
 
-    @Value("${openrouter.embedding-model:openai/text-embedding-3-small}")
+    @Value("${nvidia/nemotron-3-embed-1b:free}")
     private String embeddingModel;
 
     private static final String EMBEDDING_URL = "https://openrouter.ai/api/v1/embeddings";
