@@ -26,7 +26,7 @@ public class OpenRouterClient {
     private final RestTemplate restTemplate;
     private final OpenRouterProperties openRouterProperties;
 
-    public ReviewResult review(ReviewRequest actionsRequest){
+    public ReviewResult review(ReviewRequest actionsRequest, List<String> ragContext){
         String commitInfo = actionsRequest.getCommitInfo();
         log.info(commitInfo);
 
@@ -36,7 +36,7 @@ public class OpenRouterClient {
 
         String diff = actionsRequest.diff();
 
-        String prompt = getPrompt(diff);
+        String prompt = getPrompt(diff, ragContext);
 
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(openRouterProperties.getApiKey());
@@ -110,24 +110,26 @@ public class OpenRouterClient {
     }
 
 
-    private String getPrompt(String diff){
+    private String getPrompt(String diff, List<String> ragContext){
+
+        String joinedContext = String.join("\n", ragContext);
 
         return """
-                시니어 백엔드 개발자 관점으로 다음 코드 변경사항을 리뷰해줘.
+                시니어 백엔드 개발자 관점으로 다음 코드 변경사항(Change Request)을 리뷰해줘.
                 
                 고려할 항목
-                - 잘못 작성된 코드, 잠재적 버그 확인
-                - 코드 개선 제안
-                - 클린코드
-                - 중복코드
-                - 코드 일관성 유지
+                - 제공된 Context(클래스/필드/메서드 시그니처)와 변경된 코드 간의 타입, 호출 방식, 도메인 규칙 일치 여부 및 사이드 이펙트
+                - 잘못 작성된 코드 및 잠재적 버그 확인
+                - 코드 개선 제안 및 클린코드 규칙 준수 여부
+                - 중복 코드 및 기존 프로젝트와의 일관성 유지
+                
                 규칙
-                - 최대 5개 항목
-                - 문제의 중요도 산정
-                - 문제가 없다면 "특이사항 없음." 으로 반환
-                - 문제에 대해 간단하게 언급하고 연관 키워드 중심으로 리뷰
-                - 300자 이내
-                리뷰 포맷은 다음 예시와 같이 고정해서 리뷰해줘.
+                - 지적 사항은 최대 5개 항목까지만 작성
+                - 문제가 전혀 없다면 구조를 무시하고 "특이사항 없음." 만 반환
+                - 문제점은 연관 키워드를 중심으로 항목당 1~2줄 내외로 간결하게 작성 (전체 분량 요약 지향)
+                
+                리뷰 포맷은 다음 예시 형식으로 고정해서 출력해줘.
+                
                 [U+1F7E5 HIGH]
                 고려된 항목 | 문제점 + 코멘트
                 고려된 항목 | 문제점 + 코멘트
@@ -136,19 +138,16 @@ public class OpenRouterClient {
                 [U+1F7E9 LOW]
                 고려된 항목 | 문제점 + 코멘트
                 
-                각 중요도에 해당하는 리뷰할 문제점/항목이 없다면 - 로 대체해줘.
-                예를 들어 MEDIUM에 대한 리뷰가 없다면,
-                [U+1F7E5 HIGH]
-                고려된 항목 | 문제점 + 코멘트
-                고려된 항목 | 문제점 + 코멘트
-                [U+1F7E8 MEDIUM]
+                ※ 각 중요도에 해당하는 리뷰 항목이 없다면 아래와 같이 하위에 대시(-)만 남겨줘.
+                [🟨 MEDIUM]
                 -
-                [U+1F7E9 LOW]
-                고려된 항목 | 문제점 + 코멘트
                 
-                변경사항은 다음과 같아
+                Change Request (변경 사항)
                 %s
-                """.formatted(diff);
+                
+                Context (프로젝트 구조 및 관련 시그니처)
+                %s
+                """.formatted(diff, joinedContext);
     }
 
 }

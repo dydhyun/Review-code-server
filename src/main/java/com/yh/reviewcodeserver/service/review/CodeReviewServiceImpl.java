@@ -12,6 +12,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -21,14 +23,14 @@ public class CodeReviewServiceImpl implements CodeReviewService{
     private final ReviewHistoryRepository reviewHistoryRepository;
 
     @Override
-    public ReviewResult review(ReviewRequest request) {
+    public ReviewResult review(ReviewRequest request, List<String> ragContext) {
 
         if (request.diff() == null || request.diff().isBlank()) {
             log.info("{} repo 커밋 발생. 검토사항 없음.", request.repository());
             return ReviewResult.withoutUsage(request.getCommitInfo() + "검토할 코드 변경사항이 없습니다.");
         }
 
-        return openRouterClient.review(request);
+        return openRouterClient.review(request, ragContext);
     }
 
     @Override
