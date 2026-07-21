@@ -6,6 +6,10 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
+
+import java.time.LocalDateTime;
 
 @Entity
 @Table(
@@ -30,13 +34,18 @@ public class CodeEmbeddingEntity {
     @Column(name = "content", columnDefinition = "TEXT", nullable = false)
     private String content;
 
-    @Column(name = "embedding", columnDefinition = "vector(1536)")
-    @Convert(converter = VectorConverter.class)
+    @Column(name = "embedding", columnDefinition = "vector(2048)")
+    @JdbcTypeCode(SqlTypes.ARRAY)
     private float[] embedding;
 
     @Column(name = "updated_at", nullable = false)
-    private java.time.LocalDateTime updatedAt;
+    private LocalDateTime updatedAt;
 
+    public void updateEmbedding(String content, float[] embedding, LocalDateTime updatedAt) {
+        this.content = content;
+        this.embedding = embedding;
+        this.updatedAt = updatedAt;
+    }
 
     // float[] <-> PGvector 변환 담당
     public static class VectorConverter implements jakarta.persistence.AttributeConverter<float[], PGvector> {
@@ -50,5 +59,7 @@ public class CodeEmbeddingEntity {
             return dbData == null ? null : dbData.toArray();
         }
     }
+
+
 
 }
