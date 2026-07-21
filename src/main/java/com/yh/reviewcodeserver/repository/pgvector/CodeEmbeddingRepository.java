@@ -6,8 +6,14 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface CodeEmbeddingRepository extends JpaRepository<CodeEmbeddingEntity, Long> {
+
+    boolean existsByRepoName(String repoName);
+
+    Optional<CodeEmbeddingEntity> findByRepoNameAndFilePath(String repoName, String filePath);
+
 
     @Query(value = """
         SELECT * FROM code_embeddings
