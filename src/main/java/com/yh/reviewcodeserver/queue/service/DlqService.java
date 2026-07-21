@@ -2,9 +2,13 @@ package com.yh.reviewcodeserver.queue.service;
 
 import com.yh.reviewcodeserver.dto.ReviewRequest;
 import com.yh.reviewcodeserver.dto.ReviewResult;
+import com.yh.reviewcodeserver.entity.pgvector.CodeEmbeddingEntity;
 import com.yh.reviewcodeserver.queue.model.DlqItem;
 import com.yh.reviewcodeserver.queue.model.StreamNames;
 import com.yh.reviewcodeserver.queue.worker.ReviewStreamInitializer;
+import com.yh.reviewcodeserver.service.rag.ChangedFilePathExtractor;
+import com.yh.reviewcodeserver.service.rag.CodeIndexingService;
+import com.yh.reviewcodeserver.service.rag.RagContextService;
 import com.yh.reviewcodeserver.service.review.CodeReviewService;
 import com.yh.reviewcodeserver.service.slack.SlackService;
 import lombok.RequiredArgsConstructor;
@@ -38,6 +42,9 @@ public class DlqService {
     private final ObjectMapper objectMapper;
     private final CodeReviewService codeReviewService;
     private final SlackService slackService;
+    private final ChangedFilePathExtractor changedFilePathExtractor;
+    private final CodeIndexingService codeIndexingService;
+    private final RagContextService ragContextService;
 
     public Page<DlqItem> getFailedReviews(Pageable pageable){
 
@@ -80,7 +87,12 @@ public class DlqService {
             String payload = findPayload(recordId);
             ReviewRequest reviewRequest = objectMapper.readValue(payload, ReviewRequest.class);
 
-            ReviewResult result = codeReviewService.review(reviewRequest);
+            // ==== RAG 컨텍스트 조회 시작 ====
+            List<String> ragContext = getRagContext(reviewRequest);
+            log.info("RAG 컨텍스트 조회 완료 context = {}", ragContext);
+            // ==== RAG 컨텍스트 조회 완료 ====
+
+            ReviewResult result = codeReviewService.review(reviewRequest, ragContext);
             if (result.hasUsage()){
                 slackService.sendMessage("🔄[DLQ 복구 성공] " + reviewRequest.repository() + "\n" + result.contents());
                 redisTemplate.opsForStream().delete(StreamNames.DLQ, RecordId.of(recordId));
@@ -166,4 +178,24 @@ public class DlqService {
         }
     }
 
+// TODO:
+    private List<String> getRagContext(ReviewRequest reviewRequest) {
+        log.info("dlq Worker 내부에서 RAG 컨텍스트 조회 메서드 시작");
+        String repoName = reviewRequest.repository();
+        String diff = reviewRequest.diff();
+        log.info("changedFilePathExtractor 추출 메서드 실행");
+        List<String> changedFilePath = changedFilePathExtractor.extract(diff);
+        log.info("changedFilePathExtractor 추출 메서드 결과 = {}", changedFilePath);
+
+        codeIndexingService.indexRepoIfNeeded(repoName);
+
+        return changedFilePath.stream()
+                .flatMap(filePath -> {
+                    CodeEmbeddingEntity saved = codeIndexingService.reindexFile(repoName, filePath);
+                    return ragContextService.retrieveContext(repoName, filePath, saved.getEmbedding()).stream();
+                })
+                .distinct()
+                .toList();
+
+    }
 }

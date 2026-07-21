@@ -2,8 +2,12 @@ package com.yh.reviewcodeserver.queue.worker;
 
 import com.yh.reviewcodeserver.dto.ReviewRequest;
 import com.yh.reviewcodeserver.dto.ReviewResult;
+import com.yh.reviewcodeserver.entity.pgvector.CodeEmbeddingEntity;
 import com.yh.reviewcodeserver.queue.model.StreamNames;
 import com.yh.reviewcodeserver.queue.service.DlqService;
+import com.yh.reviewcodeserver.service.rag.ChangedFilePathExtractor;
+import com.yh.reviewcodeserver.service.rag.CodeIndexingService;
+import com.yh.reviewcodeserver.service.rag.RagContextService;
 import com.yh.reviewcodeserver.service.review.CodeReviewService;
 import com.yh.reviewcodeserver.service.slack.SlackService;
 import lombok.RequiredArgsConstructor;
@@ -18,7 +22,6 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 
 @Component
 @Slf4j
@@ -35,6 +38,9 @@ public class ReviewStreamWorker {
     private final CodeReviewService codeReviewService;
     private final SlackService slackService;
     private final DlqService dlqService;
+    private final ChangedFilePathExtractor changedFilePathExtractor;
+    private final CodeIndexingService codeIndexingService;
+    private final RagContextService ragContextService;
 
     // 직접구현 이후 Spring Data Redis의 StreamMessageListenerContainer로 변경
     @Scheduled(fixedRate = 1000)
@@ -118,7 +124,12 @@ public class ReviewStreamWorker {
 
             ReviewRequest reviewRequest = objectMapper.readValue(payload, ReviewRequest.class);
 
-            ReviewResult result = codeReviewService.review(reviewRequest);
+            // ==== RAG 컨텍스트 조회 시작 ====
+            List<String> ragContext = getRagContext(reviewRequest);
+            log.info("RAG 컨텍스트 조회 완료 context = {}", ragContext);
+            // ==== RAG 컨텍스트 조회 완료 ====
+
+            ReviewResult result = codeReviewService.review(reviewRequest, ragContext);
             slackService.sendMessage(result.contents(), reviewRequest.repository());
 
             if(result.hasUsage()) {
@@ -135,6 +146,26 @@ public class ReviewStreamWorker {
             // 네트워크/일시적 오류 -> ACK 안 함, PEL에 남겨서 reclaimAndRetry 대상으로
             log.error("메세지 처리 실패: {}", record.getId(), e);
         }
+    }
+
+    private List<String> getRagContext(ReviewRequest reviewRequest) {
+        log.info("Worker 내부에서 RAG 컨텍스트 조회 메서드 시작");
+        String repoName = reviewRequest.repository();
+        String diff = reviewRequest.diff();
+        log.info("changedFilePathExtractor 추출 메서드 실행");
+        List<String> changedFilePath = changedFilePathExtractor.extract(diff);
+        log.info("changedFilePathExtractor 추출 메서드 결과 = {}", changedFilePath);
+
+        codeIndexingService.indexRepoIfNeeded(repoName);
+
+        return changedFilePath.stream()
+                .flatMap(filePath -> {
+                    CodeEmbeddingEntity saved = codeIndexingService.reindexFile(repoName, filePath);
+                    return ragContextService.retrieveContext(repoName, filePath, saved.getEmbedding()).stream();
+                })
+                .distinct()
+                .toList();
+
     }
 
     private void ack(RecordId id) {
