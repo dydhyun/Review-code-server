@@ -6,6 +6,7 @@ import com.github.javaparser.ast.CompilationUnit;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.RecordDeclaration;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -34,6 +35,22 @@ public class SignatureExtractor {
                         .append("\n");
             }
         });
+
+        compilationUnit.findAll(RecordDeclaration.class).forEach(record -> {
+            record.getAnnotations().forEach(a -> sb.append(a).append("\n"));
+
+            sb.append("record ").append(record.getNameAsString()).append("\n");
+
+            record.getParameters().forEach(param ->
+                    sb.append("- ").append(param.toString()).append("\n"));
+
+            for (MethodDeclaration method : record.getMethods()) {
+                sb.append("- ")
+                        .append(method.getDeclarationAsString(true, true, true))
+                        .append("\n");
+            }
+        });
+
         return sb.toString();
     }
 }
