@@ -2,6 +2,9 @@ package com.yh.reviewcodeserver.service.rag;
 
 import com.yh.reviewcodeserver.dto.openrouter.EmbeddingResponse;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -15,6 +18,7 @@ import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class EmbeddingClient {
 
     private final RestTemplate restTemplate;
@@ -51,8 +55,9 @@ public class EmbeddingClient {
     private float[] parseEmbedding(ResponseEntity<EmbeddingResponse> response) {
 
         EmbeddingResponse responseBody = response.getBody();
+
         if (responseBody == null || responseBody.getData() == null || responseBody.getData().isEmpty()) {
-            throw new IllegalStateException("임베딩 응답이 비어있습니다.");
+            throw new IllegalStateException("임베딩 응답이 비어있습니다. response body : " + responseBody);
         }
 
         List<Double> embedding = responseBody.getData().get(0).getEmbedding();

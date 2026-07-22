@@ -45,20 +45,5 @@ public class CodeEmbeddingEntity {
         this.embedding = embedding;
         this.updatedAt = updatedAt;
     }
-//
-//    // float[] <-> PGvector 변환 담당
-//    public static class VectorConverter implements jakarta.persistence.AttributeConverter<float[], PGvector> {
-//        @Override
-//        public PGvector convertToDatabaseColumn(float[] attribute) {
-//            return attribute == null ? null : new PGvector(attribute);
-//        }
-//
-//        @Override
-//        public float[] convertToEntityAttribute(PGvector dbData) {
-//            return dbData == null ? null : dbData.toArray();
-//        }
-//    }
-
-
 
 }
