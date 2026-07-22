@@ -16,7 +16,7 @@ Push 요청은 Redis Stream 기반 큐에 적재되어 비동기로 처리되며
 
 여러 Repository의 Push를 함께 수신하며, Repository별로 지정된 Slack 채널로 리뷰 결과를 분리하여 전달합니다.
 
-향후에는 단순 Diff 기반 리뷰를 넘어 프로젝트 구조까지 이해하는 RAG(Retrieval Augmented Generation) 기반 리뷰 시스템으로 확장하는 것을 목표로 합니다.
+단순 Diff 기반 리뷰를 넘어, 변경된 클래스와 연관된 프로젝트 내 다른 클래스를 pgvector 기반 유사도 검색으로 함께 조회하여 프로젝트 구조를 이해하는 RAG(Retrieval Augmented Generation) 기반 리뷰 시스템으로 확장하고 있습니다.
 
 ---
 
@@ -34,7 +34,7 @@ Review Server (Controller)
 Redis Stream (review-stream)
       ↓
 Worker (Scheduled Consumer)
-      ↓ (Review 요청)
+      ↓ (RAG 컨텍스트 조회 → 상세 흐름은 아래 참고)
 OpenRouter
       ↓ (Review + 토큰 사용량 반환)
 Worker
@@ -52,7 +52,10 @@ Worker → Retry (최대 5회, PEL 기반 재처리)
 ```
 
 **Worker** :
-Redis Stream에 저장된 리뷰 요청을 주기적으로 소비(Consume)하여 AI 리뷰를 생성하는 백그라운드 컴포넌트입니다. 처리에 실패한 메시지는 ACK 하지 않고 PEL(Pending Entries List)에 남겨, 별도 스케줄러가 idle 시간이 지난 메시지를 재할당(XCLAIM)하여 재시도합니다. 재시도 판단(몇 번째 시도인지, DLQ로 넘길지)은 Worker가 담당하고, 실제 DLQ 적재와 실패 알림은 DlqService에 위임합니다.
+Redis Stream에 저장된 리뷰 요청을 주기적으로 소비(Consume)하는 백그라운드 컴포넌트입니다. Diff에서 변경된 파일 경로를 추출한 뒤, 해당 파일을 재인덱싱(임베딩 갱신)하고 pgvector 유사도 검색으로 관련 클래스를 조회해 AI 리뷰 프롬프트에 함께 전달합니다. 처리에 실패한 메시지는 ACK 하지 않고 PEL(Pending Entries List)에 남겨, 별도 스케줄러가 idle 시간이 지난 메시지를 재할당(XCLAIM)하여 재시도합니다. 재시도 판단(몇 번째 시도인지, DLQ로 넘길지)은 Worker가 담당하고, 실제 DLQ 적재와 실패 알림은 DlqService에 위임합니다.
+
+**RAG 인덱싱/검색 (CodeIndexingService / RagContextService)** :
+프로젝트 코드를 클래스 단위로 스캔하여 시그니처(어노테이션, 필드, 메서드 선언)만 추출한 뒤 임베딩 벡터로 변환해 pgvector에 저장합니다. 레포에 인덱스가 없으면 최초 1회 전체 스캔을 수행하고, 이후에는 Push마다 변경된 파일만 재인덱싱(upsert)합니다. 변경 파일의 벡터를 기준으로 같은 레포 내에서 코사인 거리 기반 유사도 검색을 수행해, 연관성 높은 클래스의 시그니처를 리뷰 컨텍스트로 제공합니다.
 
 **DlqService** :
 DLQ 관련 로직을 전담하는 컴포넌트입니다. 재시도를 모두 실패한 요청을 DLQ 스트림에 적재하고 실패를 Slack으로 알리며, DLQ 조회 API와 개별 항목 수동 재처리 API(중복 처리 방지 락 포함)를 제공합니다.
@@ -65,28 +68,30 @@ Repository별 Slack 채널 분기를 담당합니다. `slack.webhooks` 맵에 �
 
 ---
 
-### 향후 아키텍처
+### Worker 내부 동작 (RAG 인덱싱 및 컨텍스트 검색)
+
+Worker가 리뷰를 생성하기 전, 내부적으로 아래 순서로 RAG 컨텍스트를 준비합니다.
 
 ```text
-GitHub Repository (push)
+Diff 수신
       ↓
-GitHub Actions
+변경 파일 경로 추출 (ChangedFilePathExtractor)
       ↓
-Review Server
-      ↓ (job 등록)
-Redis Stream
+레포 인덱싱 여부 확인
+      ├─ 인덱싱 없음 → 레포 전체 스캔 및 인덱싱 (CodeIndexingService.indexRepoIfNeeded)
+      └─ 인덱싱 있음 → 변경 파일만 재인덱싱 (CodeIndexingService.reindexFile)
       ↓
-Worker
+재인덱싱된 벡터 기준 pgvector 유사도 검색 (RagContextService)
       ↓
-RAG Context Search
+관련 클래스 시그니처 컨텍스트 반환
       ↓
-OpenRouter
-      ↓ (Review 반환)
-Worker
-      ↓
-Review History 저장
-Slack 전송
+Diff + RAG Context → OpenRouter 프롬프트 조립
 ```
+
+* **변경 파일 경로 추출**: `ChangedFilePathExtractor`가 unified diff 포맷(`+++ b/경로.java`)에서 변경된 파일 경로만 추출
+* **레포 인덱싱 여부 확인**: `code_embeddings` 테이블에 해당 `repo_name`이 존재하는지로 판단. 없으면 최초 1회 전체 인덱싱, 있으면 스킵
+* **변경 파일 재인덱싱**: 기존에 저장된 파일이면 시그니처/벡터만 갱신(Dirty Checking 기반 UPDATE), 신규 파일이면 INSERT
+* **유사도 검색**: 재인덱싱 시 계산된 벡터를 그대로 재사용해, 같은 `repo_name` 내에서 코사인 거리(`<=>`) 기준 Top-K 검색 후 자기 자신을 제외한 관련 클래스 시그니처를 반환
 
 ---
 
@@ -99,6 +104,10 @@ GitHub Push 발생 시 Actions가 변경사항 Diff와 커밋 식별자(commitId
 ### AI 코드 리뷰
 
 OpenRouter API를 활용하여 심각도([HIGH], [MEDIUM], [LOW]) 기준으로 코드 리뷰 생성. 응답에 포함된 토큰 사용량(promptTokens, completionTokens)을 추출해 이력에 함께 저장
+
+### RAG 기반 코드 인덱싱 및 컨텍스트 검색
+
+프로젝트의 `.java` 파일을 클래스 단위로 스캔하여 시그니처를 추출하고, OpenRouter 임베딩 API로 벡터화하여 pgvector에 저장합니다. Push 발생 시 변경된 파일만 재인덱싱하고, 유사도 검색으로 연관 클래스를 찾아 Diff와 함께 리뷰 프롬프트에 반영합니다.
 
 ### Slack 알림 (Repository별 채널 분기)
 
@@ -141,11 +150,6 @@ Redis Stream 기반 큐로 Webhook 요청을 즉시 저장하고, Worker가 별�
 
 Repository 단위 MDC 로깅으로 요청 흐름 추적, OpenRouter 응답 시간 및 토큰 사용량 로깅
 
-### RAG 기반 코드 분석 (예정)
-
-변경 코드와 관련 클래스 검색 후 함께 리뷰
-Diff 뿐 아니라 프로젝트 맥락을 파악한 리뷰 제공
-
 ---
 
 ## 기술 스택
@@ -157,10 +161,11 @@ Diff 뿐 아니라 프로젝트 맥락을 파악한 리뷰 제공
 * Spring Web
 * Spring Data JPA
 * Lombok
+* JavaParser (클래스/필드/메서드 시그니처 추출)
 
 ### AI
 
-* OpenRouter API (무료모델 사용중)
+* OpenRouter API (리뷰 생성 및 임베딩, 무료모델 사용중)
 
 ### DevOps
 
@@ -181,7 +186,7 @@ Diff 뿐 아니라 프로젝트 맥락을 파악한 리뷰 제공
 
 ### Vector Search
 
-* pgvector (예정)
+* pgvector (`pgvector/pgvector:pg16` 이미지, Hibernate Vector 공식 연동)
 
 ---
 
@@ -214,6 +219,18 @@ Diff 뿐 아니라 프로젝트 맥락을 파악한 리뷰 제공
 * 맵에 등록되지 않은 Repository는 예외 없이 기본 채널로 fallback (재시도/DLQ 오적재 방지)
 * 실제 다중 레포(`dydhyun/Blog-server`) 대상 실전 테스트 및 채널별 수신 확인 완료
 
+### RAG 인덱싱 및 컨텍스트 검색
+* `pgvector/pgvector:pg16` 이미지로 pgvector 확장 도입, `hibernate-vector` 라이브러리로 벡터 타입 매핑
+* `CodeSourceProvider` / `LocalFileSystemProvider`로 로컬 파일시스템 기반 `.java` 파일 스캔 (GitHub API 등 확장 가능하도록 인터페이스 분리)
+* `SignatureExtractor`(JavaParser)로 클래스/필드/메서드 시그니처 추출 (구현 로직 제외, record 타입 별도 처리)
+* `EmbeddingClient`로 OpenRouter 임베딩 API 연동, 텍스트 → 벡터 변환
+* `CodeEmbeddingEntity` + `code_embeddings` 테이블 (`repo_name` + `file_path` 유니크 제약)에 벡터 저장
+* `CodeIndexingService`가 레포 최초 1회 전체 인덱싱 및 변경 파일 재인덱싱(upsert) 담당, Dirty Checking 기반으로 update/insert 분기 처리
+* `ChangedFilePathExtractor`로 diff에서 변경 파일 경로 추출 (unified diff 표준 포맷 파싱)
+* `RagContextService`로 변경 파일 벡터 기준 코사인 거리 유사도 검색(Top-K), 자기 자신 제외 후 관련 클래스 시그니처 반환
+* Worker가 리뷰 생성 전 RAG 컨텍스트를 조회해 Diff와 함께 OpenRouter 프롬프트에 반영하도록 연동 완료
+* 실제 프로젝트 코드 기준 전체 인덱싱 및 유사도 검색 동작 검증 완료
+
 ### 운영 안정성
 * ApiKeyFilter(인증)
 * GlobalExceptionHandler (전역 예외 처리)
@@ -224,8 +241,10 @@ Diff 뿐 아니라 프로젝트 맥락을 파악한 리뷰 제공
 
 ## 향후 개선 예정
 
+* Top-K 축소 전략 적용 (Top5 → Top3 → Top1) 및 프롬프트 토큰 기준 컨텍스트 관리
+* RAG 컨텍스트 반영 리뷰 품질에 대한 통합 테스트
 * run_id 기반 중복 요청 차단 (실제 중복 발생 시 도입)
 * DLQ 항목을 원본 Review Stream ID(originalId) 기준으로 조회/재처리하도록 개선
 * Page 응답 직렬화 안정화 (PagedModel 적용)
 * GitHub Actions에서 push 1건에 포함된 여러 커밋을 모두 반영하도록 Diff 추출 로직 개선
-* RAG 기반 프로젝트 문맥 분석
+* 멀티 레포 지원 확장 시 RAG 인덱싱 방식 결정 (GitHub API 기반 전체 스캔 등)
