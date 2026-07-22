@@ -18,12 +18,12 @@ public interface CodeEmbeddingRepository extends JpaRepository<CodeEmbeddingEnti
     @Query(value = """
         SELECT * FROM code_embeddings
         WHERE repo_name = :repoName
-        ORDER BY embedding <=> CAST(:queryVector AS vector)
+        ORDER BY embedding <=> (:queryVector)::vector
         LIMIT :topK
         """, nativeQuery = true)
     List<CodeEmbeddingEntity> findSimilar(
             @Param("repoName") String repoName,
-            @Param("queryVector") String queryVector, // "[0.1,0.2,...]" 형태 문자열로 전달
+            @Param("queryVector") float[] queryVector, // "[0.1,0.2,...]" 형태로 전달
             @Param("topK") int topK
     );
 }
