@@ -2,8 +2,8 @@ name: Review Test
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+  workflow_dispatch:
 
 jobs:
   review:
@@ -16,6 +16,7 @@ jobs:
           fetch-depth: 2
 
       - name: Save Review Data
+        if: github.event_name == 'push'
         run: |
           {
             echo "DIFF<<EOF"
@@ -30,6 +31,7 @@ jobs:
           } >> $GITHUB_ENV
 
       - name: Create payload
+        if: github.event_name == 'push'
         run: |
           jq -n \
           --arg diff "$DIFF" \
@@ -50,10 +52,47 @@ jobs:
           cat payload.json
 
       - name: Send Review Request
+        if: github.event_name == 'push'
         run: |
-          curl -X POST \
-            "${{ secrets.REVIEW_API_URL }}" \
+          curl --fail -X POST \
+            "${{ secrets.REVIEW_API_URL }}/reviews" \
             -H "Authorization: Bearer ${{ secrets.REVIEW_API_KEY }}" \
             -H "X-Repository: ${{ github.repository}}" \
             -H "Content-Type: application/json" \
             --data @payload.json
+
+      - name: Send Embedding Requests for Changed Files
+        if: github.event_name == 'push'
+        run: |
+          for file in $(git diff --name-only HEAD~1 HEAD -- '*.java' ':(exclude)src/test/**'); do
+            if [ -f "$file" ]; then
+              jq -n \
+                --arg repoName "${{ github.repository }}" \
+                --arg filePath "$file" \
+                --arg content "$(cat "$file")" \
+                '{repoName: $repoName, filePath: $filePath, content: $content}' > embedding_payload.json
+
+              curl --fail -X POST \
+                "${{ secrets.REVIEW_API_URL }}/index" \
+                -H "Authorization: Bearer ${{ secrets.REVIEW_API_KEY }}" \
+                -H "Content-Type: application/json" \
+                --data @embedding_payload.json
+            fi
+          done
+        
+      - name: Full index on manual dispatch
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          find src/main -name "*.java" | while read -r file; do
+            jq -n \
+              --arg repoName "${{ github.repository }}" \
+              --arg filePath "$file" \
+              --arg content "$(cat "$file")" \
+              '{repoName: $repoName, filePath: $filePath, content: $content}' > index_payload.json
+
+            curl --fail -X POST \
+              "${{ secrets.REVIEW_API_URL }}/index" \
+              -H "Authorization: Bearer ${{ secrets.REVIEW_API_KEY }}" \
+              -H "Content-Type: application/json" \
+              --data @index_payload.json
+          done
