@@ -5,8 +5,8 @@ import com.yh.reviewcodeserver.dto.ReviewResult;
 import com.yh.reviewcodeserver.entity.pgvector.CodeEmbeddingEntity;
 import com.yh.reviewcodeserver.queue.model.StreamNames;
 import com.yh.reviewcodeserver.queue.service.DlqService;
+import com.yh.reviewcodeserver.repository.pgvector.CodeEmbeddingRepository;
 import com.yh.reviewcodeserver.service.rag.ChangedFilePathExtractor;
-import com.yh.reviewcodeserver.service.rag.CodeIndexingService;
 import com.yh.reviewcodeserver.service.rag.RagContextService;
 import com.yh.reviewcodeserver.service.review.CodeReviewService;
 import com.yh.reviewcodeserver.service.slack.SlackService;
@@ -22,6 +22,7 @@ import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 
 @Component
 @Slf4j
@@ -39,8 +40,8 @@ public class ReviewStreamWorker {
     private final SlackService slackService;
     private final DlqService dlqService;
     private final ChangedFilePathExtractor changedFilePathExtractor;
-    private final CodeIndexingService codeIndexingService;
     private final RagContextService ragContextService;
+    private final CodeEmbeddingRepository codeEmbeddingRepository;
 
     // 직접구현 이후 Spring Data Redis의 StreamMessageListenerContainer로 변경
     @Scheduled(fixedRate = 1000)
@@ -156,12 +157,18 @@ public class ReviewStreamWorker {
         List<String> changedFilePath = changedFilePathExtractor.extract(diff);
         log.info("changedFilePathExtractor 추출 메서드 결과 = {}", changedFilePath);
 
-        codeIndexingService.indexRepoIfNeeded(repoName);
 
         return changedFilePath.stream()
                 .flatMap(filePath -> {
-                    CodeEmbeddingEntity saved = codeIndexingService.reindexFile(repoName, filePath);
-                    return ragContextService.retrieveContext(repoName, filePath, saved.getEmbedding()).stream();
+                    Optional<CodeEmbeddingEntity> existing =
+                            codeEmbeddingRepository.findByRepoNameAndFilePath(repoName, filePath);
+
+                    if (existing.isEmpty()) {
+                        log.warn("임베딩이 아직 없는 파일입니다(인덱싱 지연 또는 누락). repoName={}, filePath={}", repoName, filePath);
+                        return java.util.stream.Stream.empty();
+                    }
+
+                    return ragContextService.retrieveContext(repoName, filePath, existing.get().getEmbedding()).stream();
                 })
                 .distinct()
                 .toList();
