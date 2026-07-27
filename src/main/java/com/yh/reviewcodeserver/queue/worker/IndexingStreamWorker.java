@@ -1,6 +1,7 @@
 package com.yh.reviewcodeserver.queue.worker;
 
 import com.yh.reviewcodeserver.dto.IndexingRequest;
+import com.yh.reviewcodeserver.entity.pgvector.CodeEmbeddingEntity;
 import com.yh.reviewcodeserver.queue.model.StreamNames;
 import com.yh.reviewcodeserver.service.rag.CodeIndexingService;
 import lombok.RequiredArgsConstructor;
@@ -48,9 +49,9 @@ public class IndexingStreamWorker {
             String payload = (String) record.getValue().get("payload");
             IndexingRequest request = objectMapper.readValue(payload, IndexingRequest.class);
 
-            codeIndexingService.reindexFile(request.repoName(), request.filePath(), request.content());
+            CodeEmbeddingEntity codeEmbeddingEntity = codeIndexingService.reindexFile(request.repoName(), request.filePath(), request.content());
 
-            log.info("인덱싱 완료: {} / {}", request.repoName(), request.filePath());
+            log.info("인덱싱 완료: {} / {}", codeEmbeddingEntity.getRepoName(), codeEmbeddingEntity.getFilePath());
         } catch (Exception e) {
             log.error("인덱싱 실패, 재시도 없이 스킵: {}", record.getId(), e);
         } finally {
