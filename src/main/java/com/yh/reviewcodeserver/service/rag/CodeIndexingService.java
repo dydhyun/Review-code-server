@@ -1,5 +1,6 @@
 package com.yh.reviewcodeserver.service.rag;
 
+import com.yh.reviewcodeserver.client.llm.openrouter.EmbeddingClient;
 import com.yh.reviewcodeserver.entity.pgvector.CodeEmbeddingEntity;
 import com.yh.reviewcodeserver.repository.pgvector.CodeEmbeddingRepository;
 import lombok.RequiredArgsConstructor;
