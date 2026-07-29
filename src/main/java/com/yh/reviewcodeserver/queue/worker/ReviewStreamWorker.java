@@ -21,7 +21,11 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.databind.ObjectMapper;
 
 import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Component
@@ -33,6 +37,7 @@ public class ReviewStreamWorker {
     private static final int MAX_RETRY = 5;
     private static final Duration RECLAIM_IDLE_TIME = Duration.ofSeconds(30);
     // api 호출하고 응답받아서 ack 처리 하는 보호시간
+    private static final int MAX_INDEXING_WAIT_RETRY = 3; // 인덱싱 완료를 기다리는 횟수. 초과시 임베딩없이 진행
 
     private final StringRedisTemplate stringRedisTemplate;
     private final ObjectMapper objectMapper;
@@ -120,13 +125,26 @@ public class ReviewStreamWorker {
     private void handleRecord(MapRecord<String, Object, Object> record, long retryCount) {
 
         try {
-
             String payload = (String) record.getValue().get("payload");
-
             ReviewRequest reviewRequest = objectMapper.readValue(payload, ReviewRequest.class);
 
+            String repoName = reviewRequest.repository();
+            List<String> changedFilePath = changedFilePathExtractor.extract(reviewRequest.diff());
+            LocalDateTime enqueuedAt = extractEnqueuedAt(record.getId());
+
+            Map<String, CodeEmbeddingEntity> embeddings = findEmbeddings(repoName, changedFilePath);
+            boolean allFreshlyIndexed = isAllFreshlyIndexed(embeddings, changedFilePath, enqueuedAt);
+
+            if (!allFreshlyIndexed && retryCount < MAX_INDEXING_WAIT_RETRY) {
+                log.info("인덱싱 미완료(또는 미갱신), 재시도 대기: {} (시도 {}회)", record.getId(), retryCount);
+                return;
+            }
+            if (!allFreshlyIndexed) {
+                log.warn("인덱싱 재시도 {}회 초과, 컨텍스트 없이(또는 일부만) 리뷰 진행: {}", MAX_INDEXING_WAIT_RETRY, record.getId());
+            }
+
             // ==== RAG 컨텍스트 조회 시작 ====
-            List<String> ragContext = getRagContext(reviewRequest);
+            List<String> ragContext = getRagContext(embeddings, changedFilePath, repoName);
             log.info("RAG 컨텍스트 조회 완료 context = {}", ragContext);
             // ==== RAG 컨텍스트 조회 완료 ====
 
@@ -149,30 +167,21 @@ public class ReviewStreamWorker {
         }
     }
 
-    private List<String> getRagContext(ReviewRequest reviewRequest) {
-        log.info("Worker 내부에서 RAG 컨텍스트 조회 메서드 시작");
-        String repoName = reviewRequest.repository();
-        String diff = reviewRequest.diff();
-        log.info("changedFilePathExtractor 추출 메서드 실행");
-        List<String> changedFilePath = changedFilePathExtractor.extract(diff);
-        log.info("changedFilePathExtractor 추출 메서드 결과 = {}", changedFilePath);
 
-
+    private List<String> getRagContext(Map<String, CodeEmbeddingEntity> embeddings,
+                                       List<String> changedFilePath,
+                                       String repoName) {
         return changedFilePath.stream()
                 .flatMap(filePath -> {
-                    Optional<CodeEmbeddingEntity> existing =
-                            codeEmbeddingRepository.findByRepoNameAndFilePath(repoName, filePath);
-
-                    if (existing.isEmpty()) {
-                        log.warn("임베딩이 아직 없는 파일입니다(인덱싱 지연 또는 누락). repoName={}, filePath={}", repoName, filePath);
-                        return java.util.stream.Stream.empty();
+                    CodeEmbeddingEntity entity = embeddings.get(filePath);
+                    if (entity == null) {
+                        log.warn("인덱싱 결과가 아직 없는 파일입니다. repoName={}, filePath={}", repoName, filePath);
+                        return java.util.stream.Stream.<String>empty();
                     }
-
-                    return ragContextService.retrieveContext(repoName, filePath, existing.get().getEmbedding()).stream();
+                    return ragContextService.retrieveContext(repoName, filePath, entity.getEmbedding()).stream();
                 })
                 .distinct()
                 .toList();
-
     }
 
     private void ack(RecordId id) {
@@ -180,4 +189,30 @@ public class ReviewStreamWorker {
                 .acknowledge(StreamNames.REVIEW, ReviewStreamInitializer.GROUP_NAME, id);
     }
 
+    private Map<String, CodeEmbeddingEntity> findEmbeddings(String repoName, List<String> changedFilePath) {
+        Map<String, CodeEmbeddingEntity> found = new java.util.HashMap<>();
+        for (String filePath : changedFilePath) {
+            codeEmbeddingRepository.findByRepoNameAndFilePath(repoName, filePath)
+                    .ifPresent(entity -> found.put(filePath, entity));
+        }
+        return found;
+    }
+
+    private LocalDateTime extractEnqueuedAt(RecordId id) {
+        // "1785151264251-0" 형태에서 "-" 앞부분(epoch millis)만 추출
+        long epochMillis = Long.parseLong(id.getValue().split("-")[0]);
+        return Instant.ofEpochMilli(epochMillis)
+                .atZone(ZoneId.systemDefault())
+                .toLocalDateTime();
+    }
+
+    private boolean isAllFreshlyIndexed(Map<String, CodeEmbeddingEntity> embeddings,
+                                        List<String> changedFilePath,
+                                        LocalDateTime enqueuedAt) {
+        if (embeddings.size() != changedFilePath.size()) {
+            return false; // 아직 조회 안 되는 파일(신규)이 있는경우
+        }
+        return embeddings.values().stream()
+                .allMatch(entity -> entity.getUpdatedAt().isAfter(enqueuedAt));
+    }
 }
