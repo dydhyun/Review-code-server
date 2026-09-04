@@ -1,6 +1,6 @@
 # AI Code Review Server
 
-GitHub Push 이벤트가 발생하면 변경된 코드를 AI가 분석하여 코드 리뷰를 생성하고 Slack으로 전달하는 백엔드 서비스입니다.
+GitHub Push 이벤트가 발생하면 변경된 코드와 함께 관련도가 높은 코드를 AI가 분석하여 코드 리뷰를 생성하고 Slack으로 전달하는 백엔드 서비스입니다.
 
 ---
 
@@ -24,7 +24,7 @@ Push 요청은 Redis Stream 기반 큐에 적재되어 비동기로 처리되며
 
 ## 프로젝트 아키텍처
 
-### 현재 아키텍처
+### 전체 흐름
 
 ```text
 GitHub Repository A, B, ... (push)
@@ -59,26 +59,36 @@ Worker → Retry (최대 5회, PEL 기반 재처리)
        → DLQ 목록 조회 / 수동 재처리 API 제공
 ```
 
-**두 개의 독립된 Redis Stream**
+### 컴포넌트별 역할
+
+#### 두 개의 독립된 Redis Stream
 
 리뷰 생성과 코드 인덱싱은 서로 다른 책임을 가지므로 별도의 Stream(`review-stream`, `indexing-stream`)과 Worker(`ReviewStreamWorker`, `IndexingStreamWorker`)로 분리되어 있습니다. 인덱싱은 실패하더라도 다음 Push 때 자연히 재시도되는 성격이라 리뷰만큼 무거운 재시도/DLQ 정책을 두지 않고, 실패 시 로그만 남기고 ACK 처리합니다.
 
-**ReviewStreamWorker (인덱싱 완료 대기 게이트 포함)** :
-Redis Stream에 저장된 리뷰 요청을 주기적으로 소비합니다. Diff에서 변경된 파일 경로를 추출한 뒤, 해당 파일들이 이번 Push 이후 실제로 인덱싱(재임베딩)됐는지 `임베딩된 벡터의 updated_at`필드와 메시지 발행 시각을 비교하여 확인합니다. 아직 인덱싱이 끝나지 않았다면 ACK하지 않고 PEL에 남겨 재확인 대상으로 삼되, 일정 횟수(`MAX_INDEXING_WAIT_RETRY`) 이상 지연되면 컨텍스트 없이(또는 일부만으로) 리뷰를 진행합니다. 이 재시도 한도는 실제 처리 실패에 대한 재시도 한도(`MAX_RETRY`, DLQ 이동 기준)와는 별도로 관리되어, 인덱싱 지연이 리뷰 자체의 DLQ 이동으로 이어지지 않습니다.
+#### ReviewStreamWorker — 인덱싱 완료 대기 게이트
 
-**IndexingStreamWorker** :
-`indexing-stream`을 소비해 `CodeIndexingService의 재인덱싱 메서드`를 호출하는 얇은 컴포넌트입니다. GitHub Actions가 전송한 파일 내용을 그대로 받아 시그니처 추출·임베딩·upsert까지 수행하며, 재시도/DLQ 없이 처리합니다.
+Redis Stream에 저장된 리뷰 요청을 주기적으로 소비합니다. Diff에서 변경된 파일 경로를 추출한 뒤, 해당 파일들이 이번 Push 이후 실제로 인덱싱(재임베딩)됐는지 임베딩된 벡터의 `updated_at` 필드와 메시지 발행 시각을 비교해 확인합니다. 아직 인덱싱이 끝나지 않았다면 ACK하지 않고 PEL에 남겨 재확인 대상으로 삼습니다.
 
-**RAG 인덱싱 (CodeIndexingService / RagContextService)** :
-전달받은 파일 내용에서 클래스/필드/메서드 시그니처(구현 로직 제외)를 추출해 임베딩 벡터로 변환한 뒤 pgvector에 upsert합니다. 최초 전체 인덱싱은 GitHub Actions의 `workflow_dispatch`(수동 트리거)로 레포 내 전체 `.java` 파일을 전송해 처리하고, 이후에는 Push마다 변경된 파일만 함께 전송되어 재인덱싱됩니다. 변경 파일의 벡터를 기준으로 같은 레포 내에서 코사인 거리 기반 유사도 검색을 수행해, 연관성 높은 클래스의 시그니처를 리뷰 컨텍스트로 제공합니다.
+인덱싱 대기 판단은 처리 실패 재시도와 동일한 PEL 카운터(`deliveryCount` 기반)를 공유하지만, 인덱싱 대기 임계값(`MAX_INDEXING_WAIT_RETRY = 3`)이 DLQ 이동 임계값(`MAX_RETRY = 5`)보다 낮게 설정되어 있습니다. 그래서 인덱싱이 계속 늦어지더라도 그 전에 컨텍스트 없이(또는 일부만으로) 리뷰가 먼저 진행되고, 인덱싱 지연만으로 DLQ까지 이동하지는 않습니다.
 
-**DlqService** :
+#### IndexingStreamWorker
+
+`indexing-stream`을 소비해 `CodeIndexingService`의 재인덱싱 메서드를 호출하는 얇은 컴포넌트입니다. GitHub Actions가 전송한 파일 내용을 그대로 받아 시그니처 추출·임베딩·upsert까지 수행하며, 재시도/DLQ 없이 처리합니다.
+
+#### RAG 인덱싱 · 컨텍스트 검색 (CodeIndexingService / RagContextService)
+
+전달받은 파일 내용에서 클래스/필드/메서드 시그니처(구현 로직 제외)를 추출해 임베딩 벡터로 변환한 뒤 pgvector에 upsert합니다. 인덱싱 트리거(최초 전체 인덱싱 vs Push별 재인덱싱)에 따른 차이는 아래 [코드 인덱싱 흐름](#코드-인덱싱-흐름-최초-인덱싱-vs-재인덱싱) 표를 참고하세요. 변경 파일의 벡터를 기준으로 같은 레포 내에서 코사인 거리 기반 유사도 검색을 수행해, 연관성 높은 클래스의 시그니처를 리뷰 컨텍스트로 제공합니다.
+
+#### DlqService
+
 `review-stream` 재시도 실패 요청을 DLQ에 적재하고 Slack으로 알리며, DLQ 조회 API와 개별 항목 수동 재처리 API(중복 처리 방지 락 포함)를 제공합니다. `indexing-stream`은 별도의 DLQ 정책을 두지 않습니다.
 
-**SlackClient / SlackProperties** :
+#### SlackClient / SlackProperties
+
 Repository별 Slack 채널 분기를 담당합니다. `slack.webhooks` 맵에 등록된 Repository(`owner/repo` 형식)가 있으면 해당 채널로, 없으면 기본 webhook-url로 fallback하여 전송합니다.
 
-**Review History** :
+#### Review History
+
 성공적으로 생성된 리뷰(OpenRouter 응답에 실제 토큰 사용량이 있는 경우)는 PostgreSQL에 저장됩니다.
 
 ---
@@ -99,36 +109,20 @@ Repository별 Slack 채널 분기를 담당합니다. `slack.webhooks` 맵에 �
 
 ## 주요 기능
 
-### GitHub Push 기반 자동 리뷰
-GitHub Push 발생 시 Actions가 변경사항 Diff와 커밋 식별자(commitId), 실행 식별자(runId)를 추출해 Review Server로 전달 후 리뷰 시작
+내부 동작의 자세한 설명은 [프로젝트 아키텍처](#프로젝트-아키텍처)를 참고하세요.
 
-### AI 코드 리뷰
-OpenRouter API를 활용하여 심각도([HIGH], [MEDIUM], [LOW]) 기준으로 코드 리뷰 생성. 응답에 포함된 토큰 사용량을 추출해 이력에 함께 저장
+- **GitHub Push 기반 자동 리뷰** — Push 시 Actions가 Diff·commitId·runId를 전달해 리뷰를 시작합니다.
+- **AI 코드 리뷰** — OpenRouter API로 심각도([HIGH]/[MEDIUM]/[LOW]) 기준 리뷰를 생성하고, 토큰 사용량을 이력에 함께 저장합니다.
+- **RAG 기반 코드 인덱싱 및 컨텍스트 검색** — 변경 파일의 인덱싱 완료(freshness) 여부를 확인한 뒤, 유사도 검색으로 찾은 연관 클래스 시그니처를 Diff와 함께 리뷰 프롬프트에 반영합니다.
+- **Slack 알림 (Repository별 채널 분기)** — 지정된 채널이 없으면 기본 채널로 전송합니다.
+- **대용량 Diff 보호** — 1000줄 이상의 Diff는 리뷰를 생략하고 알림만 전송합니다.
+- **비동기 처리 (Redis Stream, 리뷰/인덱싱 분리)** — 두 책임의 재시도/실패 정책을 독립적으로 관리해 GitHub Actions Timeout을 방지합니다.
+- **자동 재시도 (Retry)** — `review-stream`은 PEL 기반으로 최대 5회까지 자동 재시도 후 DLQ로 이동합니다. `indexing-stream`은 재시도 없이 처리되며, 실패해도 다음 Push 때 자연 복구됩니다.
+- **DLQ 관리 및 수동 재처리** — 재시도 실패 요청은 DLQ로 이동해 보관하며, 목록 조회 및 개별 항목 수동 재처리 API를 제공합니다.
+- **Multi Repository 지원** — 여러 Repository의 Push를 하나의 서버가 함께 수신하며, Repository별로 Slack 채널을 분리합니다.
+- **요청 추적 로깅** — Repository 단위 MDC 로깅으로 요청 흐름을 추적하고, OpenRouter 응답 시간·토큰 사용량을 로깅합니다.
 
-### RAG 기반 코드 인덱싱 및 컨텍스트 검색
-GitHub Actions가 전송한 파일 내용을 기준으로 시그니처를 추출·임베딩하여 pgvector에 저장합니다. 리뷰 생성 전, 변경 파일들의 인덱싱이 완료됐는지 확인(freshness 체크)한 뒤 유사도 검색으로 연관 클래스를 찾아 Diff와 함께 리뷰 프롬프트에 반영합니다.
-
-### Slack 알림 (Repository별 채널 분기)
-리뷰 결과를 Repository별로 지정된 채널로 전송. 없으면 기본 채널로 전송.
-
-### 대용량 Diff 보호
-1000줄 이상의 Diff는 리뷰를 생략하고 알림만 전송
-
-### 비동기 처리 (Redis Stream, 리뷰/인덱싱 분리)
-리뷰 요청과 인덱싱 요청을 각각 별도의 Redis Stream으로 분리 처리해 GitHub Actions Timeout을 방지하고, 두 책임의 재시도/실패 정책을 독립적으로 관리
-
-### 자동 재시도 (Retry)
-`review-stream`은 PEL 기반으로 최대 5회까지 자동 재시도 후 DLQ 이동.
-
- `indexing-stream`은 재시도 없이 처리(다음 Push 때 자연 복구)
-
-### DLQ 관리 및 수동 재처리
-`review-stream` 재시도 실패 요청은 DLQ로 이동해 보관하며, 목록 조회 및 개별 항목 수동 재처리 API 제공
-
-### Multi Repository 지원
-여러 Repository의 Push를 하나의 서버가 함께 수신하며, Repository별로 Slack 채널을 분리하여 리뷰 결과를 전달
-
-### Review History 관리
+### API
 
 | Method | Endpoint | 설명 |
 |---|---|---|
@@ -140,25 +134,22 @@ GitHub Actions가 전송한 파일 내용을 기준으로 시그니처를 추출
 | GET | `/api/v1/reviews/failed` | DLQ(실패한 리뷰) 목록 조회 (페이징) |
 | POST | `/api/v1/reviews/{recordId}/retry` | DLQ 항목 수동 재처리 |
 
-### 요청 추적 로깅
-Repository 단위 MDC 로깅으로 요청 흐름 추적, OpenRouter 응답 시간 및 토큰 사용량 로깅
-
 ---
 
 ## 기술 스택
 
 ### Backend
-- Java 17 
-- Spring Boot
+- Java 17
+- Spring Boot 4.1
 - Spring Data JPA
 - Lombok
-- JavaParser(시그니처 추출)
+- JavaParser (시그니처 추출)
 
 ### AI
-OpenRouter API (리뷰 생성 및 임베딩, 무료 모델 사용)
+- OpenRouter API (리뷰 생성 및 임베딩, 무료 모델 사용)
 
 ### DevOps
-GitHub Actions (`push`/`workflow_dispatch` 이중 트리거)
+- GitHub Actions (`push` / `workflow_dispatch` 이중 트리거)
 - Docker Compose
 
 ### Messaging
@@ -177,9 +168,9 @@ GitHub Actions (`push`/`workflow_dispatch` 이중 트리거)
 
 ## 향후 개선 예정
 
-* Top-K 축소 전략 적용 (Top5 → Top3 → Top1) 및 프롬프트 토큰 기준 컨텍스트 관리
-* RAG 컨텍스트 반영 리뷰 품질에 대한 통합 테스트
-* run_id 기반 중복 요청 차단 (실제 중복 발생 시 도입)
-* DLQ 항목을 원본 Review Stream ID(originalId) 기준으로 조회/재처리하도록 개선
-* Page 응답 직렬화 안정화 (PagedModel 적용)
-* GitHub Actions에서 push 1건에 포함된 여러 커밋을 모두 반영하도록 Diff 추출 로직 개선
+- Top-K 축소 전략 적용 (Top5 → Top3 → Top1) 및 프롬프트 토큰 기준 컨텍스트 관리
+- RAG 컨텍스트 반영 리뷰 품질에 대한 통합 테스트
+- run_id 기반 중복 요청 차단 (실제 중복 발생 시 도입)
+- DLQ 항목을 원본 Review Stream ID(originalId) 기준으로 조회/재처리하도록 개선
+- Page 응답 직렬화 안정화 (PagedModel 적용)
+- GitHub Actions에서 push 1건에 포함된 여러 커밋을 모두 반영하도록 Diff 추출 로직 개선
